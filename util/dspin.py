@@ -131,7 +131,7 @@ class DSPIN:
 
             label_ord = np.argsort(km_fit.cluster_centers_.reshape(- 1))
             # the largest cluster is marked as 1, the smallest as -1, the middle as 0
-            onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[1]) * (-1) + (km_fit.labels_ == label_ord[2]) * 1
+            onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[0]) * (-1) + (km_fit.labels_ == label_ord[2]) * 1
             rec_kmeans[ii] = km_fit
         
         self.onmf_rep_tri = onmf_rep_tri
