@@ -4,15 +4,26 @@ import scanpy as sc
 import anndata
 import os
 from sklearn.cluster import KMeans
-import tqdm
+from tqdm import tqdm
 from scipy.io import savemat, loadmat
 import networkx as nx
 import matplotlib.patheffects as patheffects
 import warnings
 
 
-from compute import compute_onmf, summarize_onmf_decomposition, sample_corr_mean, learn_jmat_adam
-from plotting import onmf_to_csv
+from util.compute import compute_onmf, summarize_onmf_decomposition, corr_mean, learn_jmat_adam
+from util.plotting import onmf_to_csv
+
+def sample_corr_mean(samp_full, comp_bin):
+    
+    samp_list = np.unique(samp_full)
+    raw_corr_data = np.zeros(len(samp_list), dtype=object)
+    
+    for ind, samp in enumerate(samp_list):
+        filt_ind = samp_full == samp
+        raw_corr_data[ind] = corr_mean(comp_bin[filt_ind, :])
+        
+    return raw_corr_data, samp_list
 
 class DSPIN:
     def __init__(self,
@@ -35,6 +46,23 @@ class DSPIN:
         
         if not os.path.exists(self.save_path):
             raise ValueError("save_path does not exist.")
+
+
+    @property
+    def network(self):
+        return self._network
+
+    @property
+    def responses(self):
+        return self._responses
+    
+    @network.setter
+    def network(self, value):
+        self._network = value
+    
+    @responses.setter
+    def responses(self, value):
+        self._responses = value
 
     def onmf_abstract(self) -> np.ndarray:
         """
@@ -72,7 +100,10 @@ class DSPIN:
         self.onmf_summary = onmf_summary
         
         return onmf_summary, filename
-        
+    
+    def set_onmf_summary(self, onmf_summary: np.ndarray):
+        self.onmf_summary = onmf_summary
+
     def discretize(self) -> np.ndarray:
         """
         Discretizes the ONMF representation into three states (-1, 0, 1) using K-means clustering.
@@ -91,10 +122,8 @@ class DSPIN:
         onmf_rep_tri = np.zeros(onmf_rep_ori.shape)
         rec_kmeans = np.zeros(self.num_spin, dtype=object)
 
-        
         for ii in tqdm(range(num_gene)):
             ax = plt.subplot(grid[ii])
-
             km_fit = KMeans(n_clusters=3, n_init=10)
             km_fit.fit(onmf_rep_ori[:, ii].reshape(- 1, 1))
             plt.plot(np.sort(onmf_rep_ori[:, ii]));
@@ -153,7 +182,10 @@ class DSPIN:
         
         cur_j, cur_h = learn_jmat_adam(rec_all_corr, rec_all_mean, train_dat)
 
+        self._network = cur_j
+        self._responses = cur_h
 
                         
+    
 
     

@@ -11,8 +11,8 @@ import matplotlib.patheffects as patheffects
 import warnings
 
 
-from compute import compute_onmf, summarize_onmf_decomposition, corr_mean
-from plotting import onmf_to_csv
+from util.compute import compute_onmf, summarize_onmf_decomposition, corr_mean
+from util.plotting import onmf_to_csv
 
 def sample_corr_mean(samp_full, comp_bin):
     
