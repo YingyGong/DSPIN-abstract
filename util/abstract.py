@@ -11,9 +11,19 @@ import matplotlib.patheffects as patheffects
 import warnings
 
 
-from compute import compute_onmf, summarize_onmf_decomposition, sample_corr_mean
+from compute import compute_onmf, summarize_onmf_decomposition, corr_mean
 from plotting import onmf_to_csv
 
+def sample_corr_mean(samp_full, comp_bin):
+    
+    samp_list = np.unique(samp_full)
+    raw_corr_data = np.zeros(len(samp_list), dtype=object)
+    
+    for ind, samp in enumerate(samp_list):
+        filt_ind = samp_full == samp
+        raw_corr_data[ind] = corr_mean(comp_bin[filt_ind, :])
+        
+    return raw_corr_data, samp_list
 
 def onmf_abstract(adata: anndata.AnnData, 
                   save_path: str, 
@@ -101,8 +111,8 @@ def discretize(adata: anndata.AnnData) -> np.ndarray:
 def cross_corr(adata: anndata.AnnData,
                onmf_rep_tri: np.ndarray,
                save_path: str) -> np.ndarray:
-    # unsure whether 'sample_id' is robust enough
-    # sample_corr_mean has a small difference
+    # 'sample_id' is not robust enough
+    # local sample_corr_mean
     raw_data, samp_list = sample_corr_mean(adata.obs['sample_id'], onmf_rep_tri)
     filename = f"{save_path}data_raw.mat"
     savemat(filename, {'raw_data': raw_data, 'network_subset': list(range(len(samp_list))), 'samp_list': samp_list})
