@@ -133,6 +133,7 @@ def samp_moments(j_mat, h_vec, sample_size, mixing_time, samp_gap):
 
 import scipy.io as sio
 def learn_jmat_adam(corrs, means, train_dat):
+    backtrack_counter = 0
 
     num_round = corrs.shape[2]
     num_spin = corrs.shape[0]
@@ -261,6 +262,10 @@ def learn_jmat_adam(corrs, means, train_dat):
             jj = jj - step_gap 
             counter = counter - step_gap
             stepsz = stepsz / 2
+            backtrack_counter += 1
+            if backtrack_counter == 3:
+                print("Halting due to three backtracks.")
+                break
         else:
             counter = counter + 1
             jj = jj + 1
