@@ -279,8 +279,6 @@ class DSPIN:
             gene_matrixs.append(gene_matrix_balanced)
             current_onmf = compute_onmf(seed, self.num_spin, gene_matrix_balanced)
             np.save(f"{self.save_path}onmf_{self.num_spin}_{seed}.npy", current_onmf)
-        
-        matrix = self.matrix
 
         # Summarizing the ONMF result
         onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_pool, 
