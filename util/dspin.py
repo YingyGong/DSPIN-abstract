@@ -162,9 +162,11 @@ class DSPIN:
         matrix_path_ori = prepare_onmf_decomposition(self.adata, self.save_path, balance_by='leiden', total_sample_size=2e4, method='squareroot')
         cur_matrix = np.load(matrix_path_ori)
         cur_matrix /= cur_matrix.std(axis=0).clip(0.2, np.inf)
-        self._matrix_std = cur_matrix.std(axis=0)
+        cur_std = cur_matrix.std(axis=0)
+        cur_std = cur_std.clip(np.percentile(cur_std, 20), np.inf)
+        self._matrix_std = cur_std
         self.gene_matrix_large = cur_matrix
-        return cur_matrix
+        return cur_matrix, cur_std
 
     def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot') -> np.ndarray:
         """
@@ -214,6 +216,8 @@ class DSPIN:
                 strart_ind = np.sum(sampling_number[:ii])
                 end_ind = strart_ind + cur_num
                 gene_matrix_balanced[strart_ind: end_ind, :] = adata.X[cur_filt, :][sele_ind, :]
+                std = gene_matrix_balanced.std(axis=0)
+                gene_matrix_balanced /= std.clip(np.percentile(std, 20), np.inf)
                 matrix_path = self.save_path + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '_' + str(seed) + '.npy'
                 np.save(matrix_path, gene_matrix_balanced)
 
@@ -244,6 +248,7 @@ class DSPIN:
         gene_matrix /= self._matrix_std
         onmf_rep_ori = self._onmf_summary.transform(gene_matrix)
         self._onmf_rep_ori = onmf_rep_ori
+        return onmf_rep_ori
 
     def discretize(self) -> np.ndarray:
         """
