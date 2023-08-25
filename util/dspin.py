@@ -16,7 +16,7 @@ import warnings
 
 from util.compute import (
     compute_onmf,
-    # summarize_onmf_decomposition, (the local one is used for test)
+    summarize_onmf_decomposition,
     corr_mean,
     learn_jmat_adam,
     prepare_onmf_decomposition,
@@ -35,65 +35,6 @@ def sample_corr_mean(samp_full, comp_bin):
         raw_corr_data[ind] = corr_mean(comp_bin[filt_ind, :])
         
     return raw_corr_data, samp_list
-
-def summarize_onmf_decomposition(num_spin, num_repeat, num_pool, onmf_path, gene_matrices, fig_folder=None):
-    
-    # num_repeat = len(onmf_paths)
-    # rec_components = np.zeros((num_repeat, num_pool, gene_matrix.shape[1]))
-
-    # Assuming each matrix has the same shape as the first one in the list
-    rec_components = np.zeros((num_repeat, num_pool, gene_matrices[0].shape[1]))
-    
-    for ii in range(num_repeat):
-        cur_onmf = np.load('%sonmf_%d_%d.npy' % (onmf_path, num_pool, ii + 1), allow_pickle=True).item()
-        rec_components[ii] = cur_onmf.components_
-    
-    all_components = rec_components.reshape(num_repeat * num_pool, -1)
-
-
-    gene_weight = np.sum(all_components ** 2, axis=0) ** 0.5
-    gene_sele_filt = gene_weight > np.mean(gene_weight)
-    all_components_sub = all_components[:, gene_sele_filt]
-
-    kmeans = KMeans(n_clusters=num_spin, random_state=0).fit(all_components)
-    kmeans_gene = KMeans(n_clusters=num_spin, random_state=0).fit(all_components_sub.T)
-
-    components_kmeans = np.zeros((num_spin, gene_matrices[0].shape[1]))
-    for ii in range(num_spin):
-        components_kmeans[ii] = np.mean(all_components[kmeans.labels_ == ii], axis=0)
-    components_kmeans = normalize(components_kmeans, axis=1, norm='l2')
-    
-    components_summary = np.zeros((num_spin, gene_matrices[0].shape[1]))
-    for ii in range(num_spin):
-        filt_genes = np.argmax(components_kmeans, axis=0) == ii
-        # Take the mean of the selected sub-matrix across all matrices
-        sub_matrix = np.mean([m[:, filt_genes] for m in gene_matrices], axis=0)
-        sub_onmf = NMF(n_components=1, init='random', random_state=0).fit(sub_matrix)
-        components_summary[ii, filt_genes] = sub_onmf.components_[0]
-    components_summary = normalize(components_summary, axis=1, norm='l2')
-    
-    onmf_summary = NMF(n_components=num_spin, init='random', random_state=0)
-    onmf_summary.components_ = components_summary
-
-    sc.set_figure_params(figsize=(12, 4))
-    plt.subplot(1, 3, 1)
-    gene_order = np.argsort(kmeans_gene.labels_)
-    comp_order = np.argsort(kmeans.labels_)
-    plt.imshow(all_components_sub[comp_order, :][:, gene_order], aspect='auto', cmap='Blues', vmax=np.max(all_components) / 10, interpolation='none')
-    plt.title('All components')
-
-    plt.subplot(1, 3, 2)
-    plt.imshow(components_kmeans[:, gene_sele_filt][:, gene_order], aspect='auto', cmap='Blues', vmax=np.max(components_kmeans) / 10, interpolation='none')
-    plt.title('Kmeans components')
-
-    plt.subplot(1, 3, 3)
-    plt.imshow(components_summary[:, gene_sele_filt][:, gene_order], aspect='auto', cmap='Blues', vmax=np.max(all_components) / 10, interpolation='none')
-    plt.title('Summary components')
-
-    if fig_folder is not None:
-        plt.savefig(fig_folder + 'onmf_decomposition_summary.png', dpi=300, bbox_inches='tight')
-
-    return onmf_summary
 
 class DSPIN:
     def __init__(self,
@@ -222,6 +163,7 @@ class DSPIN:
         cur_matrix = np.load(matrix_path_ori)
         cur_matrix /= cur_matrix.std(axis=0).clip(0.2, np.inf)
         self._matrix_std = cur_matrix.std(axis=0)
+        self.gene_matrix_large = cur_matrix
         return cur_matrix
 
     def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot') -> np.ndarray:
@@ -258,7 +200,6 @@ class DSPIN:
         sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
 
         gene_matrix_balanced = np.zeros((np.sum(sampling_number), adata.X.shape[1]))
-        gene_matrixs = []
 
         # Pre-computing num_repeat times
         print("Pre-computing")
@@ -276,15 +217,14 @@ class DSPIN:
                 matrix_path = self.save_path + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '_' + str(seed) + '.npy'
                 np.save(matrix_path, gene_matrix_balanced)
 
-            gene_matrixs.append(gene_matrix_balanced)
             current_onmf = compute_onmf(seed, self.num_spin, gene_matrix_balanced)
             np.save(f"{self.save_path}onmf_{self.num_spin}_{seed}.npy", current_onmf)
 
         # Summarizing the ONMF result
         onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_pool, 
                                                     onmf_path= self.save_path, 
-                                                    gene_matrices= gene_matrixs,
-                                                    fig_folder= self.save_path + 'fig/')
+                                                    gene_matrix = self.gene_matrix_large,
+                                                    fig_folder= self.save_path + 'figs/')
         np.save(f"{self.save_path}onmf_summary_{self.num_spin}.npy", onmf_summary)
         self.onmf_summary (onmf_summary)
 
