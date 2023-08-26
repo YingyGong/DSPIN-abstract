@@ -41,7 +41,7 @@ class DSPIN:
                  adata: anndata.AnnData,
                  save_path: str,
                  num_spin: int = 10,
-                 num_pool: int = None,
+                 num_onmf_components: int = None,
                  num_repeat: int = 10,
                  epoch: int = 150,
                  spin_thres: int = 16,
@@ -58,10 +58,10 @@ class DSPIN:
         
         self.num_spin = num_spin
         
-        if num_pool is None:
-            self.num_pool = num_spin
+        if num_onmf_components is None:
+            self.num_onmf_components = num_spin
         else:
-            self.num_pool = num_pool
+            self.num_onmf_components = num_onmf_components
         self.num_repeat = num_repeat
 
         num_gene = self.adata.X.shape[1]
@@ -74,8 +74,8 @@ class DSPIN:
         if self.num_spin > 10:
             warnings.warn("num_spin larger than 10 takes long time in Python. Please use computing clusters for larger num_spin.")
 
-        if self.num_spin > self.num_pool:
-            raise ValueError("num_spin must be less than or equal to num_pool.")
+        if self.num_spin > self.num_onmf_components:
+            raise ValueError("num_spin must be less than or equal to num_onmf_components.")
         
         if not os.path.exists(self.save_path):
             raise ValueError("save_path does not exist.")
@@ -99,6 +99,9 @@ class DSPIN:
         self._sample_list = None
         self._onmf_summary = None
         self._raw_data = None
+        self._gene_matrix_large = None
+        self._use_data_list = None
+        self.gene_program_csv = None
 
 
     @property
@@ -158,30 +161,16 @@ class DSPIN:
         self._onmf_rep_ori = value
     
 
-    def preprocessing(self):
+    def matrix_balance(self):
         matrix_path_ori = prepare_onmf_decomposition(self.adata, self.save_path, balance_by='leiden', total_sample_size=2e4, method='squareroot')
         cur_matrix = np.load(matrix_path_ori)
         cur_matrix /= cur_matrix.std(axis=0).clip(0.2, np.inf)
         cur_std = cur_matrix.std(axis=0)
         cur_std = cur_std.clip(np.percentile(cur_std, 20), np.inf)
-        self._matrix_std = cur_std
         self.gene_matrix_large = cur_matrix
-        return cur_matrix, cur_std
+        self._matrix_std = cur_std
 
-    def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot') -> np.ndarray:
-        """
-        Abstracts the ONMF process: pre-computes ONMF multiple times, summarizes the results, and saves the summary to CSV.
-
-        Parameters:
-        - adata (anndata.AnnData): The annotated data matrix.
-        - save_path (str): The path where the ONMF results and summary will be saved.
-        - num_spin (int): Number of spins.
-        - num_pool (int): Number of pools.
-        - num_repeat (int), optional, default 10: Number of times to repeat the ONMF computation.
-
-        Returns:
-        - str: The filename where the ONMF summary has been saved as a CSV.
-        """
+    def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot'):
         adata = self.adata
         
         if issparse(adata.X):
@@ -225,19 +214,23 @@ class DSPIN:
             np.save(f"{self.save_path}onmf_{self.num_spin}_{seed}.npy", current_onmf)
 
         # Summarizing the ONMF result
-        onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_pool, 
+        onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_onmf_components, 
                                                     onmf_path= self.save_path, 
                                                     gene_matrix = self.gene_matrix_large,
                                                     fig_folder= self.save_path + 'figs/')
         np.save(f"{self.save_path}onmf_summary_{self.num_spin}.npy", onmf_summary)
-        self.onmf_summary (onmf_summary)
+        self.onmf_summary = onmf_summary
 
         # Save ONMF summary to CSV
         features = onmf_summary.components_
         gene_names = self.adata.var_names
-        filename = onmf_to_csv(features, gene_names, self.save_path, thres=0.05)
+        gene_program_filename = onmf_to_csv(features, gene_names, self.save_path, thres=0.05)
+        self.gene_program_csv = gene_program_filename
 
-        return onmf_summary, filename
+    def gene_program_discovery(self, **kwargs):
+        #TODO: kwargs needed to be change later because it is not friendly for users
+        self.matrix_balance()
+        self.onmf_abstract(**kwargs)
     
     def compute_onmf_rep_ori(self) -> np.ndarray:
         """
@@ -247,7 +240,7 @@ class DSPIN:
         gene_matrix = self.adata.X.astype(np.float64)
         gene_matrix /= self._matrix_std
         onmf_rep_ori = self._onmf_summary.transform(gene_matrix)
-        self._onmf_rep_ori = onmf_rep_ori
+        self.onmf_rep_ori = onmf_rep_ori
         return onmf_rep_ori
 
     def discretize(self) -> np.ndarray:
@@ -257,7 +250,7 @@ class DSPIN:
         Returns:
         - np.ndarray: The discretized ONMF representation.
         """
-        onmf_rep_ori = self._onmf_rep_ori
+        onmf_rep_ori = self.onmf_rep_ori
         num_spin = onmf_rep_ori.shape[1]
 
         sc.set_figure_params(figsize=[2, 2])
