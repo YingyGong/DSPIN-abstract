@@ -198,7 +198,7 @@ class DSPIN:
 
             print(f"Round_{seed}")
             np.random.seed(seed) 
-            for ii in tqdm(range(len(cluster_list))):
+            for ii in range(len(cluster_list)):
                 cur_num = sampling_number[ii]
                 cur_filt = adata.obs[balance_by] == cluster_list[ii]
                 sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
@@ -217,7 +217,7 @@ class DSPIN:
         onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_onmf_components, 
                                                     onmf_path= self.save_path, 
                                                     gene_matrix = self.gene_matrix_large,
-                                                    fig_folder= self.save_path + 'figs/')
+                                                    fig_folder= self.save_path )
         np.save(f"{self.save_path}onmf_summary_{self.num_spin}.npy", onmf_summary)
         self.onmf_summary = onmf_summary
 
@@ -295,7 +295,7 @@ class DSPIN:
         use_data_list = select_diverse_sample(raw_data, num_cluster=32, fig_folder=fig_folder)
         self.use_data_list = use_data_list
 
-    def network_infer(self, example_list=None):
+    def network_construct(self, example_list=None):
         # parameter setting
 
         raw_data = self.raw_data
@@ -336,6 +336,12 @@ class DSPIN:
         self._network = cur_j
         self._responses = cur_h
 
+    def network_infer(self, sample_column_name = None, example_list=None):
+        self.compute_onmf_rep_ori()
+        self.discretize()
+        self.cross_corr(sample_column_name)
+        self.post_processing()
+        self.network_construct(example_list=example_list)
                         
     
 

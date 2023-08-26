@@ -287,7 +287,7 @@ def onmf(X, rank, max_iter=500):
     S = np.random.rand(rank, n)
     S = np.abs(orth(S.T).T)
     
-    pbar = tqdm(total=max_iter, desc = "Reconstruction Error")
+    pbar = tqdm(total=max_iter, desc = "Iteration Progress")
 
     for itr in range(max_iter):
             
@@ -298,10 +298,12 @@ def onmf(X, rank, max_iter=500):
         coef_S = AtX / S.dot(AtX.T).dot(S)
         S = np.nan_to_num(S * coef_S) #, posinf=1e5)
 
-        if itr % 50 == 0:
-            error = np.linalg.norm(X - np.dot(S.T, A), 'fro')
-            pbar.set_description(f"Reconstruction Error: {error:.2f}")
-            pbar.update(50)
+        pbar.update(1)
+
+        if itr % 20 == 0:
+            error = np.linalg.norm(X - np.dot(A, S), 'fro')
+            pbar.set_postfix({"Reconstruction Error": f"{error:.2f}"})
+
     
     pbar.close()
 
