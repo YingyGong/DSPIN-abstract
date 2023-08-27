@@ -132,8 +132,11 @@ def samp_moments(j_mat, h_vec, sample_size, mixing_time, samp_gap):
     return corr_para, mean_para
 
 import scipy.io as sio
+from collections import deque
+
 def learn_jmat_adam(corrs, means, train_dat):
     backtrack_counter = 0
+    step_gap = 20
 
     num_round = corrs.shape[2]
     num_spin = corrs.shape[0]
@@ -171,10 +174,10 @@ def learn_jmat_adam(corrs, means, train_dat):
     vjj = np.zeros((num_spin,))
     mhh = np.zeros((num_spin, num_round))
     vhh = np.zeros((num_spin, num_round))
-    mjj_log = np.zeros((num_spin, num_spin, num_epoch))
-    vjj_log = np.zeros((num_spin, num_spin, num_epoch))
-    mhh_log = np.zeros((num_spin, num_round, num_epoch))
-    vhh_log = np.zeros((num_spin, num_round, num_epoch))
+    mjj_log = deque(maxlen=step_gap)
+    vjj_log = deque(maxlen=step_gap)
+    mhh_log = deque(maxlen=step_gap)
+    vhh_log = deque(maxlen=step_gap)
 
     jj = 1
     while jj <= num_epoch:
@@ -233,10 +236,10 @@ def learn_jmat_adam(corrs, means, train_dat):
 
         rec_jgrad_sum_norm[jj - 1] = np.sqrt(np.sum(np.sum(rec_jgrad_full, axis=2) ** 2, axis=(0, 1)))
 
-        mjj_log[:, :, jj-1] = mjj 
-        vjj_log[:, :, jj-1] = vjj
-        mhh_log[:, :, jj-1] = mhh 
-        vhh_log[:, :, jj-1] = vhh 
+        mjj_log.append(mjj)
+        vjj_log.append(vjj)
+        mhh_log.append(mhh)
+        vhh_log.append(vhh)
     
         if jj == list_step[count]:
             
@@ -252,13 +255,13 @@ def learn_jmat_adam(corrs, means, train_dat):
             count += 1
           
 
-        step_gap = 20
+        
         if jj > (step_gap) and rec_jgrad_sum_norm[jj - 1] > 2 * rec_jgrad_sum_norm[jj - 1 - step_gap]:
             print('warning: backtrack')
-            mjj = mjj_log[:, :, jj-1 - step_gap] 
-            vjj = vjj_log[:, :, jj-1 - step_gap] 
-            mhh = mhh_log[:, :, jj-1 - step_gap] 
-            vhh = vhh_log[:, :, jj-1 - step_gap] 
+            mjj = mjj_log[0]  # get the oldest entry in the deque
+            vjj = vjj_log[0]
+            mhh = mhh_log[0]
+            vhh = vhh_log[0]
             jj = jj - step_gap 
             counter = counter - step_gap
             stepsz = stepsz / 2
