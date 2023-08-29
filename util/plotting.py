@@ -165,3 +165,53 @@ def plot_j_network(j_mat, pos=None, label=None, thres=None, seed=0):
     ax.set_axis_off()
         
     return pos
+
+def temporary_spin_name():
+    pass
+
+from sklearn.cluster import KMeans
+
+def gene_program_decomposition(onmf_summary,
+                               num_spin,
+                               spin_name_extend,
+                               gene_matrix,
+                               onmf_rep_tri,
+                               fig_folder,
+                               num_gene_select: int = 10,
+                               n_clusters: int = 4):
+    features = onmf_summary.components_
+    num_gene_select = num_gene_select
+    gene_mod_ind = np.argmax(features, axis=0)
+
+    gene_mod_use = []
+    for ind in range(num_spin):
+        ii = ind
+        gene_in_mod = np.where(gene_mod_ind == ii)[0]
+        cur_gene = gene_in_mod[np.argsort(- features[ii, gene_in_mod])[: num_gene_select]]
+        gene_mod_use += list(cur_gene)
+    gene_mod_use = np.array(gene_mod_use)
+
+    np.random.seed(0)
+    subset_ind = np.random.choice(range(gene_matrix.shape[0]), size=10000, replace=False)
+    cell_order = np.argsort(KMeans(n_clusters=n_clusters).fit_predict(onmf_rep_tri[subset_ind, :]))
+    gene_matrix_subset = gene_matrix[subset_ind, :][:, gene_mod_use]
+    gene_matrix_subset /= np.max(gene_matrix, axis=0)[gene_mod_use].clip(0.2, np.inf)
+
+    sc.set_figure_params(figsize=[10, 5])
+
+    plt.subplot(1, 2, 1)
+    plt.imshow(gene_matrix_subset[cell_order, :].T, aspect='auto', cmap='Blues', interpolation='none')
+    plt.ylabel('Gene')
+    plt.xlabel('Cell')
+    plt.title('Gene expression')
+    plt.grid()
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(onmf_rep_tri[subset_ind, :][cell_order, :].T, aspect='auto', cmap='Blues', interpolation='none')
+    plt.yticks(range(num_spin), spin_name_extend, fontsize=12)
+    plt.gca().yaxis.set_ticks_position('right')
+    plt.xlabel('Cell');
+    plt.title('Gene program expression')
+    plt.grid()
+
+    plt.savefig(fig_folder + 'gene_program_example.png', bbox_inches='tight')
