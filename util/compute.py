@@ -386,7 +386,7 @@ def summarize_onmf_decomposition(num_spin, num_repeat, num_pool, onmf_path, gene
 
     if fig_folder is not None:
         plt.savefig(fig_folder + 'onmf_decomposition_summary.png', dpi=300, bbox_inches='tight')
-
+        plt.close() # the plot is saved but now shown
     return onmf_summary
 
 def onmf_discretize(onmf_rep_ori, fig_folder):
