@@ -435,7 +435,7 @@ def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_s
 
     gene_matrix_balanced = np.zeros((np.sum(sampling_number), cadata.X.shape[1]))
 
-    for ii in tqdm(range(len(cluster_list))):
+    for ii in range(len(cluster_list)):
         cur_num = sampling_number[ii]
         cur_filt = cadata.obs[balance_by] == cluster_list[ii]
         sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
