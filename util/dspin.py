@@ -20,7 +20,8 @@ from util.compute import (
     corr_mean,
     learn_jmat_adam,
     prepare_onmf_decomposition,
-    select_diverse_sample
+    select_diverse_sample,
+    onmf_discretize
 )
 
 from util.plotting import onmf_to_csv
@@ -241,7 +242,6 @@ class DSPIN:
         gene_matrix /= self._matrix_std
         onmf_rep_ori = self._onmf_summary.transform(gene_matrix)
         self.onmf_rep_ori = onmf_rep_ori
-        return onmf_rep_ori
 
     def discretize(self) -> np.ndarray:
         """
@@ -251,28 +251,11 @@ class DSPIN:
         - np.ndarray: The discretized ONMF representation.
         """
         onmf_rep_ori = self.onmf_rep_ori
-        num_spin = onmf_rep_ori.shape[1]
-
-        sc.set_figure_params(figsize=[2, 2])
-        fig, grid = sc.pl._tools._panel_grid(0.3, 0.3, ncols=7, num_panels=num_spin)
-        onmf_rep_tri = np.zeros(onmf_rep_ori.shape)
-        rec_kmeans = np.zeros(self.num_spin, dtype=object)
-
-        for ii in tqdm(range(num_spin)):
-            ax = plt.subplot(grid[ii])
-            km_fit = KMeans(n_clusters=3, n_init=10)
-            km_fit.fit(onmf_rep_ori[:, ii].reshape(- 1, 1))
-            plt.plot(np.sort(onmf_rep_ori[:, ii]));
-            plt.plot(np.sort(km_fit.cluster_centers_[km_fit.labels_].reshape(- 1)));
-
-            label_ord = np.argsort(km_fit.cluster_centers_.reshape(- 1))
-            # the largest cluster is marked as 1, the smallest as -1, the middle as 0
-            onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[0]) * (-1) + (km_fit.labels_ == label_ord[2]) * 1
-            rec_kmeans[ii] = km_fit
+        fig_folder = self.save_path + 'figs/'
         
+        onmf_rep_tri = onmf_discretize(onmf_rep_ori, fig_folder)        
         self.onmf_rep_tri = onmf_rep_tri
 
-        return onmf_rep_tri
 
     def cross_corr(self, sample_col_name) -> np.ndarray:
         # sample_corr_mean is the local one

@@ -166,8 +166,10 @@ def plot_j_network(j_mat, pos=None, label=None, thres=None, seed=0):
         
     return pos
 
-def temporary_spin_name():
-    pass
+def temporary_spin_name(csv_file): 
+    df = pd.read_csv(csv_file, header=None)
+    spin_names = [ 'P' + '_'.join(df[col][:6]) for col in df.columns]
+    return spin_names
 
 from sklearn.cluster import KMeans
 
@@ -214,4 +216,4 @@ def gene_program_decomposition(onmf_summary,
     plt.title('Gene program expression')
     plt.grid()
 
-    plt.savefig(fig_folder + 'gene_program_example.png', bbox_inches='tight')
+    plt.savefig(fig_folder + 'gene_program_decomposition.png', bbox_inches='tight')

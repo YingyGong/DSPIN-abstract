@@ -410,7 +410,9 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
 
     if fig_folder is not None:
         plt.savefig(fig_folder + 'onmf_discretize.png', dpi=300, bbox_inches='tight')
-        
+        plt.close(fig) # the plot is saved but now shown
+    
+    
     return onmf_rep_tri, rec_kmeans
 
 from scipy.sparse import issparse
