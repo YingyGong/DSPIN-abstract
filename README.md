@@ -1,5 +1,5 @@
-# DSPIN
-Code and examples of the D-SPIN framework for the preprint "D-SPIN constructs gene regulatory network models from multiplexed scRNA-seq data revealing organizing principles of cellular perturbation response" ([bioRxiv](https://www.biorxiv.org/content/10.1101/2023.04.19.537364))
+# DSPIN-Abstract
+Reframed code and examples of the D-SPIN framework with an object-oriented design for the preprint "D-SPIN constructs gene regulatory network models from multiplexed scRNA-seq data revealing organizing principles of cellular perturbation response" ([bioRxiv](https://www.biorxiv.org/content/10.1101/2023.04.19.537364))
 
 ![alternativetext](/figure/readme/Figure1_20230309_Inna.png)
 
