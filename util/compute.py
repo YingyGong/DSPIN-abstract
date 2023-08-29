@@ -495,5 +495,6 @@ def select_diverse_sample(raw_data_tri, num_cluster, fig_folder):
             plt.yticks([])
 
     plt.savefig(fig_folder + 'pca_cluster.png', dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
     return use_data_list

@@ -321,6 +321,8 @@ class DSPIN:
 
     def network_infer(self, sample_column_name = None, example_list=None):
         self.compute_onmf_rep_ori()
+
+        print('Discretize ONMF representation into three states')
         self.discretize()
         self.cross_corr(sample_column_name)
         self.post_processing()
