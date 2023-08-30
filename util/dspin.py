@@ -24,7 +24,7 @@ from util.compute import (
     onmf_discretize
 )
 
-from util.plotting import onmf_to_csv
+from util.plotting import onmf_to_csv, gene_program_decomposition, temporary_spin_name
 
 def sample_corr_mean(samp_full, comp_bin):
     
@@ -165,9 +165,9 @@ class DSPIN:
     def matrix_balance(self):
         matrix_path_ori = prepare_onmf_decomposition(self.adata, self.save_path, balance_by='leiden', total_sample_size=2e4, method='squareroot')
         cur_matrix = np.load(matrix_path_ori)
-        cur_matrix /= cur_matrix.std(axis=0).clip(0.2, np.inf)
         cur_std = cur_matrix.std(axis=0)
         cur_std = cur_std.clip(np.percentile(cur_std, 20), np.inf)
+        cur_matrix /= cur_std
         self.gene_matrix_large = cur_matrix
         self._matrix_std = cur_std
 
@@ -227,11 +227,27 @@ class DSPIN:
         gene_names = self.adata.var_names
         gene_program_filename = onmf_to_csv(features, gene_names, self.save_path, thres=0.05)
         self.gene_program_csv = gene_program_filename
+    
 
-    def gene_program_discovery(self, **kwargs):
+    def gene_program_discovery(self, num_gene_select: int = 10, n_clusters: int = 4, sample_column_name = None, **kwargs):
         #TODO: kwargs needed to be change later because it is not friendly for users
         self.matrix_balance()
-        self.onmf_abstract(**kwargs)
+        # self.onmf_abstract(**kwargs)
+        self.compute_onmf_rep_ori()
+
+        print('Discretize ONMF representation into three states')
+        self.discretize()
+        self.cross_corr(sample_column_name)
+        spin_name = temporary_spin_name(self.gene_program_csv)
+        gene_program_decomposition(self.onmf_summary,
+                                   self.num_spin,
+                                   spin_name,
+                                   self.adata.X.astype(np.float64),
+                                   self.onmf_rep_tri,
+                                   self.save_path + 'figs/',
+                                   num_gene_select, 
+                                   n_clusters)
+        
     
     def compute_onmf_rep_ori(self) -> np.ndarray:
         """
@@ -269,7 +285,6 @@ class DSPIN:
         filename = f"{save_path}data_raw.mat"
         savemat(filename, {'raw_data': raw_data, 'network_subset': list(range(len(samp_list))), 'samp_list': samp_list})
 
-        return raw_data
     
     def post_processing(self):
         # balance the experimental conditions by clustering and downsampling
@@ -319,12 +334,8 @@ class DSPIN:
         self._network = cur_j
         self._responses = cur_h
 
-    def network_infer(self, sample_column_name = None, example_list=None):
-        self.compute_onmf_rep_ori()
-
-        print('Discretize ONMF representation into three states')
-        self.discretize()
-        self.cross_corr(sample_column_name)
+    def network_infer(self, example_list=None):
+        
         self.post_processing()
         self.network_construct(example_list=example_list)
                         

@@ -413,7 +413,7 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
         plt.close(fig) # the plot is saved but now shown
     
     
-    return onmf_rep_tri, rec_kmeans
+    return onmf_rep_tri
 
 from scipy.sparse import issparse
 def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot'):
