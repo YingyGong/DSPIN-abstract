@@ -232,7 +232,7 @@ class DSPIN:
     def gene_program_discovery(self, num_gene_select: int = 10, n_clusters: int = 4, sample_column_name = None, **kwargs):
         #TODO: kwargs needed to be change later because it is not friendly for users
         self.matrix_balance()
-        # self.onmf_abstract(**kwargs)
+        self.onmf_abstract(**kwargs)
         self.compute_onmf_rep_ori()
 
         print('Discretize ONMF representation into three states')
