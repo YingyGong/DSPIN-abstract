@@ -217,3 +217,4 @@ def gene_program_decomposition(onmf_summary,
     plt.grid()
 
     plt.savefig(fig_folder + 'gene_program_decomposition.png', bbox_inches='tight')
+

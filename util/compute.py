@@ -620,3 +620,15 @@ def compute_gradient(cur_j, cur_h, cur_state):
         cur_j_grad = (cur_j_grad + cur_j_grad.T) / 2
 
     return cur_j_grad, cur_h_grad
+
+def spin_order():
+    samp_list_batch = np.array([samp[-7: ] for samp in samp_list])
+    h_vec_ref = np.zeros([num_spin, len(samp_list)])
+    for ii in range(3):
+        cur_filt = samp_list_batch == batch_list[ii]
+        h_vec_ref[:, cur_filt] = rec_href[:, ii].reshape(- 1, 1)
+
+    h_rela = h_vec - h_vec_ref #h_vec is cur_h
+
+    kmeans_spin = KMeans(n_clusters=4).fit(h_rela) #what does rela mean?
+    spin_order = np.argsort(kmeans_spin.labels_)
