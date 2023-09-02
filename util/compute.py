@@ -279,6 +279,76 @@ def learn_jmat_adam(corrs, means, train_dat):
 
     return cur_j, cur_h
 
+def learn_jmat_adam_2(num_spin, state_list, train_dat):
+    num_perturb = 250
+    np.random.seed(0)
+    # not sure this num_gene
+    perturb_matrix = 0.4 * np.random.randn(num_perturb, num_gene)
+    perturb_matrix_expand = np.zeros([num_spin, num_sample])
+    perturb_matrix_expand[:, 1: ] = perturb_matrix.T
+
+    num_sample = len(state_list)
+    cur_j = np.zeros([num_spin, num_spin])
+    cur_h = np.zeros([num_spin, num_sample])
+
+    all_gradients = []
+
+    #TODO: factor out parameters
+
+    # Parameters
+    decay_rate = 0.001
+    num_iterations = 400
+    initial_learning_rate = 0.05
+    l1_j = 0.005
+    l1_thres = 0.02
+    l2_h = 2
+
+    # Hyperparameters for Adam
+    beta1 = 0.9
+    beta2 = 0.999
+    epsilon = 1e-8
+
+    # Initialize Adam parameters
+    m_j, v_j = np.zeros([num_spin, num_spin]), np.zeros([num_spin, num_spin])
+    m_h, v_h = np.zeros([num_spin, num_sample]), np.zeros([num_spin, num_sample])
+
+    # Adam optimization
+    pbar = tqdm(range(1, num_iterations + 1))
+    for ii in pbar:
+        j_grad = np.zeros([num_spin, num_spin])
+        h_grad = np.zeros([num_spin, num_sample])
+
+        for jj in range(num_sample):
+            # Compute the gradient
+            gradient = compute_gradient(cur_j, cur_h[:, jj].reshape(- 1, 1), state_list[jj].T)
+            j_grad += gradient[0]- l1_j * (cur_j / l1_thres).clip(- 1, 1)
+            h_grad[:, jj] = gradient[1].reshape(- 1)
+
+        h_grad[:, 0] = h_grad.mean(axis=1)
+        h_grad -= l2_h * ((cur_h - cur_h[:, 0].reshape(- 1, 1)) - 3 * perturb_matrix_expand)
+
+        j_grad /= num_sample
+
+        all_gradients.append([np.linalg.norm(j_grad), np.linalg.norm(h_grad)])
+        pbar.set_description("Grad %f %f" % tuple(all_gradients[-1]))
+
+        # Compute decayed learning rate
+        learning_rate = initial_learning_rate / (1 + decay_rate * ii)
+
+        # Adam update for parameters
+        m_j = beta1 * m_j + (1 - beta1) * j_grad
+        v_j = beta2 * v_j + (1 - beta2) * (j_grad**2)
+        m_hat_j = m_j / (1 - beta1**ii)
+        v_hat_j = v_j / (1 - beta2**ii)
+        cur_j += learning_rate * m_hat_j / (np.sqrt(v_hat_j) + epsilon)
+
+        m_h = beta1 * m_h + (1 - beta1) * h_grad
+        v_h = beta2 * v_h + (1 - beta2) * (h_grad**2)
+        m_hat_h = m_h / (1 - beta1**ii)
+        v_hat_h = v_h / (1 - beta2**ii)
+        cur_h += learning_rate * m_hat_h / (np.sqrt(v_hat_h) + epsilon)
+
+
 from scipy.linalg import orth 
 from sklearn.decomposition import NMF
 
@@ -413,7 +483,7 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
         plt.close(fig) # the plot is saved but now shown
     
     
-    return onmf_rep_tri
+    return onmf_rep_trixw
 
 from scipy.sparse import issparse
 def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot'):
@@ -498,3 +568,55 @@ def select_diverse_sample(raw_data_tri, num_cluster, fig_folder):
     plt.close(fig)
 
     return use_data_list
+
+import numba
+
+@numba.njit
+def np_apply_along_axis(func1d, axis, arr):
+  assert arr.ndim == 2
+  assert axis in [0, 1]
+  if axis == 0:
+    result = np.empty(arr.shape[1])
+    for i in range(len(result)):
+      result[i] = func1d(arr[:, i])
+  else:
+    result = np.empty(arr.shape[0])
+    for i in range(len(result)):
+      result[i] = func1d(arr[i, :])
+  return result
+
+@numba.njit
+def np_mean(array, axis):
+  return np_apply_along_axis(np.mean, axis, array)
+
+@numba.jit()
+def compute_gradient(cur_j, cur_h, cur_state):
+    num_spin = cur_j.shape[0]
+
+    cur_j_grad = np.zeros((num_spin, num_spin))
+    cur_h_grad = np.zeros((num_spin, 1))
+
+    j_filt = cur_j.copy()
+    np.fill_diagonal(j_filt, 0)
+    effective_h = j_filt.dot(cur_state) + cur_h
+
+    for ii in range(num_spin):
+        j_sub = cur_j[ii, ii]
+        h_sub = effective_h[ii, :]
+
+        term1 = np.exp(j_sub + h_sub)
+        term2 = np.exp(j_sub - h_sub)
+
+        j_sub_grad = cur_state[ii, :] ** 2 - (term1 + term2) / (term1 + term2 + 1)
+        h_eff_grad = cur_state[ii, :] - (term1 - term2) / (term1 + term2 + 1)
+
+        j_off_sub_grad = h_eff_grad * cur_state
+
+        cur_j_grad[ii, :] = np_mean(j_off_sub_grad, axis=1)
+        cur_j_grad[ii, ii] = np.mean(j_sub_grad)
+
+        cur_h_grad[ii] = np.mean(h_eff_grad)
+
+        cur_j_grad = (cur_j_grad + cur_j_grad.T) / 2
+
+    return cur_j_grad, cur_h_grad

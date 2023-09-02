@@ -334,11 +334,25 @@ class DSPIN:
         self._network = cur_j
         self._responses = cur_h
 
+
     def network_infer(self, example_list=None):
         
         self.post_processing()
         self.network_construct(example_list=example_list)
-                        
+
+
+    def state_list(self):
+        adata = self.adata
+        onmf_rep_tri = self.onmf_rep_tri
+        samp_list = np.unique(adata.obs['sample_id'])
+
+        state_list = []
+        for samp in samp_list:
+            cur_filt = adata.obs['sample_id'] == samp
+            state_list.append(onmf_rep_tri[cur_filt, :] * 2 - 1) # why * 2 - 1?
+
+    def pseudolikelihood(self):
+        
     
 
     
