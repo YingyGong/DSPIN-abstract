@@ -352,6 +352,7 @@ class DSPIN:
             state_list.append(onmf_rep_tri[cur_filt, :] * 2 - 1) # why * 2 - 1?
 
     def pseudolikelihood(self):
+        pass
         
     
 
