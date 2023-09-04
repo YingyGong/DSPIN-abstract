@@ -279,13 +279,7 @@ def learn_jmat_adam(corrs, means, train_dat):
 
     return cur_j, cur_h
 
-def learn_jmat_adam_2(num_spin, state_list, train_dat):
-    num_perturb = 250
-    np.random.seed(0)
-    # not sure this num_gene
-    perturb_matrix = 0.4 * np.random.randn(num_perturb, num_gene)
-    perturb_matrix_expand = np.zeros([num_spin, num_sample])
-    perturb_matrix_expand[:, 1: ] = perturb_matrix.T
+def learn_jmat_adam_2(num_spin, state_list, train_dat, perturb_matrix_expand):
 
     num_sample = len(state_list)
     cur_j = np.zeros([num_spin, num_spin])
