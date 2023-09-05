@@ -346,7 +346,7 @@ def learn_jmat_adam_2(num_spin, state_list, train_dat, perturb_matrix_expand):
 from scipy.linalg import orth 
 from sklearn.decomposition import NMF
 
-def onmf(X, rank, max_iter=500):
+def onmf(X, rank, max_iter=50):
     
     m, n = X.shape
     
@@ -367,7 +367,7 @@ def onmf(X, rank, max_iter=500):
 
         pbar.update(1)
 
-        if itr % 20 == 0:
+        if itr % 10 == 0:
             error = np.linalg.norm(X - np.dot(A, S), 'fro')
             pbar.set_postfix({"Reconstruction Error": f"{error:.2f}"})
 
@@ -469,7 +469,7 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
         plt.plot(np.sort(km_fit.cluster_centers_[km_fit.labels_].reshape(- 1)));
         
         label_ord = np.argsort(km_fit.cluster_centers_.reshape(- 1))
-        onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[1]) * 0.5 + (km_fit.labels_ == label_ord[2]) * 1
+        onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[0]) * (-1) + (km_fit.labels_ == label_ord[2]) * 1
         rec_kmeans[ii] = km_fit
 
     if fig_folder is not None:
@@ -477,7 +477,7 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
         plt.close(fig) # the plot is saved but now shown
     
     
-    return onmf_rep_trixw
+    return onmf_rep_tri
 
 from scipy.sparse import issparse
 def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot'):

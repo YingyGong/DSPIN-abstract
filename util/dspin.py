@@ -49,7 +49,7 @@ class DSPIN:
                  stepsz: float = 0.02,
                  dropout: int = 0,
                  counter: int = 1,
-                 samplingsz: float = 1e6,
+                 samplingsz: float = 5e6,
                  samplingmix: float = 1e3,
                  rec_gap: int = 10,
                  lam_12h: float = 0.005,
