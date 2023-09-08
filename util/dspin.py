@@ -21,21 +21,12 @@ from util.compute import (
     learn_jmat_adam,
     prepare_onmf_decomposition,
     select_diverse_sample,
-    onmf_discretize
+    onmf_discretize,
+    sample_corr_mean
 )
 
 from util.plotting import onmf_to_csv, gene_program_decomposition, temporary_spin_name
 
-def sample_corr_mean(samp_full, comp_bin):
-    
-    samp_list = np.unique(samp_full)
-    raw_corr_data = np.zeros(len(samp_list), dtype=object)
-    
-    for ind, samp in enumerate(samp_list):
-        filt_ind = samp_full == samp
-        raw_corr_data[ind] = corr_mean(comp_bin[filt_ind, :])
-        
-    return raw_corr_data, samp_list
 
 class DSPIN:
     def __init__(self,

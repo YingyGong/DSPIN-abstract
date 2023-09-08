@@ -24,7 +24,6 @@ def sample_corr_mean(samp_full, comp_bin):
     
     samp_list = np.unique(samp_full)
     raw_corr_data = np.zeros(len(samp_list), dtype=object)
-    comp_bin = comp_bin * 2 - 1
     
     for ind, samp in enumerate(samp_list):
         filt_ind = samp_full == samp
