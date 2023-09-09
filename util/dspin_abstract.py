@@ -147,12 +147,10 @@ class SmallDSPIN(AbstractDSPIN):
         super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat)
         print("SmallDSPIN initialized.")
         self._onmf_rep_ori = adata.X
-        print(self._onmf_rep_ori.shape)
 
     @property
     def onmf_rep_ori(self):
         return self.adata.X
-    
     
     def network_construct(self, 
                           specific_hyperparams: 
@@ -173,3 +171,15 @@ class SmallDSPIN(AbstractDSPIN):
         self.discretize()
         self.cross_corr(sample_col_name)
         self.network_construct()
+
+class LargeDSPIN(AbstractDSPIN):
+    pass
+
+
+# Select the class to use
+class DSPIN(object):
+    def __new__(cls, *args, **kwargs):
+        if args[0].shape[0] < 100000:
+            return SmallDSPIN(*args, **kwargs)
+        else:
+            return LargeDSPIN(*args, **kwargs)
