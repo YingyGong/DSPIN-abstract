@@ -19,10 +19,14 @@ from util.compute import (
     compute_onmf,
     summarize_onmf_decomposition,
     learn_jmat_adam,
+    learn_jmat_adam2,
     prepare_onmf_decomposition,
     select_diverse_sample,
     onmf_discretize,
-    sample_corr_mean
+    sample_corr_mean,
+    prepare_data,
+    compute_single_onmf,
+    compute_repeated_onmf
 )
 
 from util.plotting import (
@@ -148,6 +152,7 @@ class SmallDSPIN(AbstractDSPIN):
         print("SmallDSPIN initialized.")
         self._onmf_rep_ori = adata.X
 
+
     @property
     def onmf_rep_ori(self):
         return self.adata.X
@@ -172,9 +177,187 @@ class SmallDSPIN(AbstractDSPIN):
         self.cross_corr(sample_col_name)
         self.network_construct()
 
-class LargeDSPIN(AbstractDSPIN):
-    pass
 
+
+class LargeDSPIN(AbstractDSPIN):
+    def __init__(self, 
+                    adata: anndata.AnnData,
+                    save_path: str,
+                    num_spin: int = 10,
+                    num_onmf_components: int = None,
+                    num_repeat: int = 10):
+            super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat)
+            print("LargeDSPIN initialized.")
+            self._onmf_summary = None
+            self._gene_matrix_large = None
+            self._use_data_list = None
+            self._gene_program_csv = None
+    
+    @property
+    def optimized_algorithm(self):
+        if self.num_spin < 25:
+            return 1
+        else:
+            return 2
+    
+    @optimized_algorithm.setter
+    def optimized_algorithm(self, value):
+        self._optimized_algorithm = value
+    
+    @property
+    def specific_hyperparams(self):
+        if self.optimized_algorithm == 1:
+            return {'epoch': 150, 'spin_thres': 16,
+                    'stepsz': 0.02, 'dropout': 0, 'counter': 1,
+                    'samplingsz': 5e6, 'samplingmix': 1e3, 'rec_gap': 10,
+                    'lam_12h': 0.005, 'lam_l1j': 0.01}
+        elif self.optimized_algorithm == 2:
+            return {'decay_rate': 0.001, 'num_iterations': 400,
+                    'initial_learning_rate': 0.05, 
+                    'l2_h': 5e7, 'lam_l1j': 0.005, 'l1_thres': 0.02}
+
+    @specific_hyperparams.setter
+    def specific_hyperparams(self, value):
+        self._specific_hyperparams = value
+
+    @property
+    def example_list(self):
+        return self._example_list
+    
+    @example_list.setter
+    def example_list(self, value):
+        self._example_list = value
+    
+    def __setattr__(self, name, value):
+        if name == 'example_list':
+            self._example_list = value
+        else:
+            return super().__setattr__(name, value)
+    
+    def __getattr__(self, name):
+        return super().__getattr__(name)
+
+    def matrix_balance(self):
+        matrix_path_ori = prepare_onmf_decomposition(self.adata, self.save_path, balance_by='leiden', total_sample_size=2e4, method='squareroot')
+        cur_matrix = np.load(matrix_path_ori)
+        cur_std = cur_matrix.std(axis=0)
+        cur_std = cur_std.clip(np.percentile(cur_std, 20), np.inf)
+        cur_matrix /= cur_std
+        self.gene_matrix_large = cur_matrix
+        self.matrix_std = cur_std
+
+    def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot'):
+        #TODO: this huge function needs to be factored out
+        adata = self.adata
+        
+        if issparse(adata.X):
+            adata.X = adata.X.toarray()
+        
+        maximum_sample_rate = 2
+        cluster_list = list(adata.obs[balance_by].value_counts().keys())
+        cluster_count = list(adata.obs[balance_by].value_counts())
+
+        if method == 'porpotional':
+            weight_fun = cluster_count
+        elif method == 'squareroot':
+            esti_size = (np.sqrt(cluster_count) / np.sum(np.sqrt(cluster_count)) * total_sample_size).astype(int)
+            weight_fun = np.min([esti_size, maximum_sample_rate * np.array(cluster_count)], axis=0)
+        elif method == 'equal':
+            esti_size = total_sample_size / len(cluster_list)
+            weight_fun = np.min([esti_size * np.ones(len(cluster_count)), maximum_sample_rate * np.array(cluster_count)], axis=0)
+        sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
+
+        gene_matrix_balanced = np.zeros((np.sum(sampling_number), adata.X.shape[1]))
+
+        # Pre-computing num_repeat times
+        print("Pre-computing")
+        for seed in range(1, self.num_repeat + 1):
+
+            print(f"Round_{seed}")
+            np.random.seed(seed) 
+            for ii in range(len(cluster_list)):
+                cur_num = sampling_number[ii]
+                cur_filt = adata.obs[balance_by] == cluster_list[ii]
+                sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
+                strart_ind = np.sum(sampling_number[:ii])
+                end_ind = strart_ind + cur_num
+                gene_matrix_balanced[strart_ind: end_ind, :] = adata.X[cur_filt, :][sele_ind, :]
+                std = gene_matrix_balanced.std(axis=0)
+                gene_matrix_balanced /= std.clip(np.percentile(std, 20), np.inf)
+                matrix_path = self.save_path + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '_' + str(seed) + '.npy'
+                np.save(matrix_path, gene_matrix_balanced)
+
+            current_onmf = compute_onmf(seed, self.num_spin, gene_matrix_balanced)
+            np.save(f"{self.save_path}onmf_{self.num_spin}_{seed}.npy", current_onmf)
+
+        # Summarizing the ONMF result
+        onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_onmf_components, 
+                                                    onmf_path= self.save_path, 
+                                                    gene_matrix = self.gene_matrix_large,
+                                                    fig_folder= self.save_path )
+        np.save(f"{self.save_path}onmf_summary_{self.num_spin}.npy", onmf_summary)
+        self.onmf_summary = onmf_summary
+
+        # Save ONMF summary to CSV
+        features = onmf_summary.components_
+        gene_names = self.adata.var_names
+        gene_program_filename = onmf_to_csv(features, gene_names, self.save_path, thres=0.05)
+        self.gene_program_csv = gene_program_filename
+
+    def gene_program_discovery(self, num_gene_select: int = 10, n_clusters: int = 4, sample_column_name = None, **kwargs):
+        #TODO: kwargs needed to be change later because it is not friendly for users
+        self.matrix_balance()
+        self.onmf_abstract(**kwargs)
+        self.compute_onmf_rep_ori()
+
+        print('Discretize ONMF representation into three states')
+        self.discretize()
+        self.cross_corr(sample_column_name)
+        spin_name = temporary_spin_name(self.gene_program_csv)
+        gene_program_decomposition(self.onmf_summary,
+                                   self.num_spin,
+                                   spin_name,
+                                   self.adata.X.astype(np.float64),
+                                   self.onmf_rep_tri,
+                                   self.save_path + 'figs/',
+                                   num_gene_select, 
+                                   n_clusters)
+    
+    def compute_onmf_rep_ori(self) -> np.ndarray:
+        """
+        Computes the original ONMF representation given the ONMF summary.
+        """
+
+        gene_matrix = self.adata.X.astype(np.float64)
+        gene_matrix /= self.matrix_std
+        onmf_rep_ori = self.onmf_summary.transform(gene_matrix)
+        self.onmf_rep_ori = onmf_rep_ori
+    
+    def post_processing(self):
+        # balance the experimental conditions by clustering and downsampling
+        raw_data = self.raw_data
+        fig_folder = self.save_path + 'figs/'
+        use_data_list = select_diverse_sample(raw_data, num_cluster=32, fig_folder=fig_folder)
+        self.use_data_list = use_data_list
+    
+    def network_construct(self, specific_hyperparams=None):
+        train_dat = self.common_hyperparas_setting(self.example_list)
+        train_dat.update(self.specific_hyperparams)
+
+        rec_all_corr = train_dat['rec_all_corr']
+        rec_all_mean = train_dat['rec_all_mean']
+        if self.optimized_algorithm == 1:
+            cur_j, cur_h = learn_jmat_adam(rec_all_corr, rec_all_mean, train_dat)
+        elif self.optimized_algorithm == 2:
+            cur_j, cur_h = learn_jmat_adam2(rec_all_corr, rec_all_mean, train_dat)
+        
+        self._network = cur_j
+        self._responses = cur_h
+
+    def network_infer(self, example_list):
+        self.example_list = example_list
+        self.post_processing()
+        self.network_construct()
 
 # Select the class to use
 class DSPIN(object):

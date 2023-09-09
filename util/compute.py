@@ -9,6 +9,52 @@ import matplotlib.pyplot as plt
 import scanpy as sc 
 from tqdm import tqdm
 
+def prepare_data(adata, balance_by, total_sample_size, method):
+    if issparse(adata.X):
+            adata.X = adata.X.toarray()
+        
+    maximum_sample_rate = 2
+    cluster_list = list(adata.obs[balance_by].value_counts().keys())
+    cluster_count = list(adata.obs[balance_by].value_counts())
+
+    if method == 'porpotional':
+        weight_fun = cluster_count
+    elif method == 'squareroot':
+        esti_size = (np.sqrt(cluster_count) / np.sum(np.sqrt(cluster_count)) * total_sample_size).astype(int)
+        weight_fun = np.min([esti_size, maximum_sample_rate * np.array(cluster_count)], axis=0)
+    elif method == 'equal':
+        esti_size = total_sample_size / len(cluster_list)
+        weight_fun = np.min([esti_size * np.ones(len(cluster_count)), maximum_sample_rate * np.array(cluster_count)], axis=0)
+    sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
+
+    return sampling_number
+
+def compute_single_onmf(self, seed, sampling_number, cluster_list, adata, balance_by, total_sample_size, method):
+    np.random.seed(seed)
+    gene_matrix_balanced = np.zeros((np.sum(sampling_number), adata.X.shape[1]))
+    
+    for ii in range(len(cluster_list)):
+        cur_num = sampling_number[ii]
+        cur_filt = adata.obs[balance_by] == cluster_list[ii]
+        sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
+        start_ind = np.sum(sampling_number[:ii])
+        end_ind = start_ind + cur_num
+        gene_matrix_balanced[start_ind:end_ind, :] = adata.X[cur_filt, :][sele_ind, :]
+        std = gene_matrix_balanced.std(axis=0)
+        gene_matrix_balanced /= std.clip(np.percentile(std, 20), np.inf)
+        matrix_path = self.save_path + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '_' + str(seed) + '.npy'
+        np.save(matrix_path, gene_matrix_balanced)
+
+    current_onmf = compute_onmf(seed, self.num_spin, gene_matrix_balanced)
+    np.save(f"{self.save_path}onmf_{self.num_spin}_{seed}.npy", current_onmf)
+
+def compute_repeated_onmf(self, sampling_number, cluster_list, adata, balance_by, total_sample_size, method):
+    print("Pre-computing")
+    for seed in range(1, self.num_repeat + 1):
+        print(f"Round_{seed}")
+        self.compute_single_onmf(seed, sampling_number, cluster_list, adata, balance_by, total_sample_size, method)
+
+
 def corr(data):
     return data.T.dot(data) / data.shape[0]
 
@@ -217,8 +263,8 @@ def learn_jmat_adam(corrs, means, train_dat):
             rec_hgrad = rec_hgrad + train_dat['lam_l2h'] * cur_h
 
         rec_hgrad_full = rec_hgrad
-        mhh = beta1 * mhh + (1 - beta1) * rec_hgrad
-        vhh = beta2 * vhh + (1 - beta2) * (rec_hgrad ** 2)
+        mhh = beta1 * mhh + (1 - beta1) * rec_hgrad # momentum
+        vhh = beta2 * vhh + (1 - beta2) * (rec_hgrad ** 2) # maginitude history
 
         mHathh = mhh / (1 - beta1 ** counter)
         vHathh = vhh / (1 - beta2 ** counter)
@@ -278,7 +324,7 @@ def learn_jmat_adam(corrs, means, train_dat):
 
     return cur_j, cur_h
 
-def learn_jmat_adam_2(num_spin, state_list, train_dat, perturb_matrix_expand):
+def learn_jmat_adam2(num_spin, state_list, train_dat, perturb_matrix_expand):
 
     num_sample = len(state_list)
     cur_j = np.zeros([num_spin, num_spin])
