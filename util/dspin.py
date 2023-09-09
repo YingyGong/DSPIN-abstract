@@ -17,7 +17,6 @@ import warnings
 from util.compute import (
     compute_onmf,
     summarize_onmf_decomposition,
-    corr_mean,
     learn_jmat_adam,
     prepare_onmf_decomposition,
     select_diverse_sample,
@@ -152,7 +151,7 @@ class DSPIN:
     def onmf_rep_ori(self, value):
         self._onmf_rep_ori = value
     
-
+    # only for 2 and 3 case
     def matrix_balance(self):
         matrix_path_ori = prepare_onmf_decomposition(self.adata, self.save_path, balance_by='leiden', total_sample_size=2e4, method='squareroot')
         cur_matrix = np.load(matrix_path_ori)
@@ -162,6 +161,7 @@ class DSPIN:
         self.gene_matrix_large = cur_matrix
         self._matrix_std = cur_std
 
+    # only for 2 and 3 case
     def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot'):
         adata = self.adata
         
@@ -239,7 +239,7 @@ class DSPIN:
                                    num_gene_select, 
                                    n_clusters)
         
-    
+    # 2 and 3
     def compute_onmf_rep_ori(self) -> np.ndarray:
         """
         Computes the original ONMF representation given the ONMF summary.
@@ -276,7 +276,7 @@ class DSPIN:
         filename = f"{save_path}data_raw.mat"
         savemat(filename, {'raw_data': raw_data, 'network_subset': list(range(len(samp_list))), 'samp_list': samp_list})
 
-    
+    # 2 and 3
     def post_processing(self):
         # balance the experimental conditions by clustering and downsampling
         raw_data = self.raw_data

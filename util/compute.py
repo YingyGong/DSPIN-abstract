@@ -471,9 +471,9 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
         onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[0]) * (-1) + (km_fit.labels_ == label_ord[2]) * 1
         rec_kmeans[ii] = km_fit
 
-    if fig_folder is not None:
-        plt.savefig(fig_folder + 'onmf_discretize.png', dpi=300, bbox_inches='tight')
-        plt.close(fig) # the plot is saved but now shown
+    # if fig_folder is not None:
+    #     plt.savefig(fig_folder + 'onmf_discretize.png', dpi=300, bbox_inches='tight')
+    #     plt.close(fig) # the plot is saved but now shown
     
     
     return onmf_rep_tri
