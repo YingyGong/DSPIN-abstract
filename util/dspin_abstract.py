@@ -42,16 +42,22 @@ class AbstractDSPIN(ABC):
                  save_path: str,
                  num_spin: int = 10,
                  num_onmf_components: int = None,
-                 num_repeat: int = 10):
+                 num_repeat: int = 10,
+                 filter_threshold: float = 0.02):
+        # Filter out low expressed genes
+        self.filter_threshold = filter_threshold
+        counts_threshold = int(adata.shape[0] * self.filter_threshold)
+        sc.pp.filter_genes(adata, min_counts=counts_threshold)
+
         self.adata = adata
         self.save_path = save_path
         self.num_spin = num_spin
+        self.num_repeat = num_repeat
         
         if num_onmf_components is None:
             self.num_onmf_components = num_spin
         else:
             self.num_onmf_components = num_onmf_components
-        self.num_repeat = num_repeat
 
         if self.num_spin > 10:
             warnings.warn("num_spin larger than 10 takes long time in Python. Please use computing clusters for larger num_spin.")
@@ -185,8 +191,9 @@ class LargeDSPIN(AbstractDSPIN):
                     save_path: str,
                     num_spin: int = 10,
                     num_onmf_components: int = None,
-                    num_repeat: int = 10):
-            super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat)
+                    num_repeat: int = 10,
+                    filter_threshold: float = 0.02):
+            super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat, filter_threshold)
             print("LargeDSPIN initialized.")
             self._onmf_summary = None
             self._gene_matrix_large = None
