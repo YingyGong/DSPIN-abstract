@@ -441,7 +441,7 @@ def compute_onmf(seed, num_spin, gene_matrix_bin):
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 
-def summarize_onmf_decomposition(num_spin, num_repeat, num_pool, onmf_path, gene_matrix, fig_folder=None):
+def summarize_onmf_decomposition(num_spin, num_repeat, num_pool, onmf_path, gene_matrix, fig_folder=None, preprograms=None):
 
     rec_components = np.zeros((num_repeat, num_pool, gene_matrix.shape[1]))
 
@@ -464,13 +464,20 @@ def summarize_onmf_decomposition(num_spin, num_repeat, num_pool, onmf_path, gene
     components_kmeans = normalize(components_kmeans, axis=1, norm='l2')
     
     components_summary = np.zeros((num_spin, gene_matrix.shape[1]))
+
+
     for ii in range(num_spin):
-        filt_genes = np.argmax(components_kmeans, axis=0) == ii
+        if preprograms:
+            if ii >= num_spin - len(preprograms):
+                filt_genes = preprograms[ii - num_spin + len(preprograms)]
+        else:
+            filt_genes = np.argmax(components_kmeans, axis=0) == ii
         # filt_genes = components_kmeans[ii] > 1e-3
         sub_matrix = gene_matrix[:, filt_genes]
 
         sub_onmf = NMF(n_components=1, init='random', random_state=0).fit(sub_matrix)
         components_summary[ii, filt_genes] = sub_onmf.components_[0]
+
     components_summary = normalize(components_summary, axis=1, norm='l2')
     
     # components_summary = components_kmeans
@@ -560,16 +567,16 @@ def balanced_gene_matrix(sampling_number, cluster_list, cadata, data_folder, bal
     std_clipped = std.clip(np.percentile(std, 20), np.inf)
     gene_matrix_balanced_normalized = gene_matrix_balanced / std_clipped
 
-    matrix_path = data_folder + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '.npy'
-    np.save(gene_matrix_balanced_normalized, gene_matrix_balanced)
-
-    return std, matrix_path
+    return std, gene_matrix_balanced_normalized
 
 def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot', maximum_sample_rate = 2):
     
     sampling_number, cluster_list = preprocess_sampling(cadata, balance_by, total_sample_size, method, maximum_sample_rate)
 
-    std, matrix_path = balanced_gene_matrix(sampling_number, cluster_list, cadata, data_folder, balance_by, total_sample_size, method)
+    std, gene_matrix_balanced_normalized = balanced_gene_matrix(sampling_number, cluster_list, cadata, data_folder, balance_by, total_sample_size, method)
+
+    matrix_path = data_folder + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '.npy'
+    np.save(matrix_path, gene_matrix_balanced_normalized)
 
     return std, matrix_path
 

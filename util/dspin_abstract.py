@@ -13,7 +13,7 @@ from scipy.sparse import issparse
 import networkx as nx
 import matplotlib.patheffects as patheffects
 import warnings
-
+import itertools
 
 from util.compute import (
     compute_onmf,
@@ -24,7 +24,8 @@ from util.compute import (
     select_diverse_sample,
     onmf_discretize,
     sample_corr_mean,
-    preprocess_sampling
+    preprocess_sampling,
+    balanced_gene_matrix
 )
 
 from util.plotting import (
@@ -258,39 +259,37 @@ class LargeDSPIN(AbstractDSPIN):
 
     def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot'):
         #TODO: this huge function needs to be factored out
+        
+        preprograms = self.preprograms
         adata = self.adata
-        preprogram = self.preprogram
+
+        if preprograms:
+            preprogram_flat = list(itertools.chain(*preprograms))
+            mask = ~adata.obs.index.isin(preprogram_flat)
+            adata = adata[mask]
         
         sampling_number, cluster_list = preprocess_sampling(adata, balance_by, total_sample_size, method, maximum_sample_rate=2)
         
-        gene_matrix_balanced = np.zeros((np.sum(sampling_number), adata.X.shape[1]))
-
         # Pre-computing num_repeat times
         print("Pre-computing")
         for seed in range(1, self.num_repeat + 1):
 
             print(f"Round_{seed}")
-            np.random.seed(seed) 
-            for ii in range(len(cluster_list)):
-                cur_num = sampling_number[ii]
-                cur_filt = adata.obs[balance_by] == cluster_list[ii]
-                sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
-                strart_ind = np.sum(sampling_number[:ii])
-                end_ind = strart_ind + cur_num
-                gene_matrix_balanced[strart_ind: end_ind, :] = adata.X[cur_filt, :][sele_ind, :]
-                std = gene_matrix_balanced.std(axis=0)
-                gene_matrix_balanced /= std.clip(np.percentile(std, 20), np.inf)
-                matrix_path = self.save_path + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '_' + str(seed) + '.npy'
-                np.save(matrix_path, gene_matrix_balanced)
+            np.random.seed(seed)
 
-            current_onmf = compute_onmf(seed, self.num_spin, gene_matrix_balanced)
+            std, gene_matrix_balanced_normalized = balanced_gene_matrix(sampling_number, cluster_list, adata, self.save_path, balance_by, total_sample_size, method)
+            matrix_path = self.save_path + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '_' + str(seed) + '.npy'
+            np.save(matrix_path, gene_matrix_balanced_normalized)
+
+            current_onmf = compute_onmf(seed, self.num_spin, gene_matrix_balanced_normalized)
             np.save(f"{self.save_path}onmf_{self.num_spin}_{seed}.npy", current_onmf)
 
         # Summarizing the ONMF result
         onmf_summary = summarize_onmf_decomposition(self.num_spin, self.num_repeat, self.num_onmf_components, 
                                                     onmf_path= self.save_path, 
                                                     gene_matrix = self.gene_matrix_large,
-                                                    fig_folder= self.save_path )
+                                                    fig_folder= self.save_path,
+                                                    preprograms=preprograms)
         np.save(f"{self.save_path}onmf_summary_{self.num_spin}.npy", onmf_summary)
         self.onmf_summary = onmf_summary
 
