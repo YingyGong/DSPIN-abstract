@@ -525,12 +525,11 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
     return onmf_rep_tri
 
 from scipy.sparse import issparse
-def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot'):
-    
+
+def preprocess_sampling(cadata, balance_by='leiden', total_sample_size=1e5, method='squareroot', maximum_sample_rate = 2):
     if issparse(cadata.X):
         cadata.X = cadata.X.toarray()
 
-    maximum_sample_rate = 2
     cluster_list = list(cadata.obs[balance_by].value_counts().keys())
     cluster_count = list(cadata.obs[balance_by].value_counts())
 
@@ -543,6 +542,12 @@ def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_s
         esti_size = total_sample_size / len(cluster_list)
         weight_fun = np.min([esti_size * np.ones(len(cluster_count)), maximum_sample_rate * np.array(cluster_count)], axis=0)
     sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
+
+    return sampling_number, cluster_list
+
+def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot', maximum_sample_rate = 2):
+    
+    sampling_number, cluster_list = preprocess_sampling(cadata, balance_by, total_sample_size, method, maximum_sample_rate)
 
     gene_matrix_balanced = np.zeros((np.sum(sampling_number), cadata.X.shape[1]))
 
