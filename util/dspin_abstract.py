@@ -24,9 +24,7 @@ from util.compute import (
     select_diverse_sample,
     onmf_discretize,
     sample_corr_mean,
-    prepare_data,
-    compute_single_onmf,
-    compute_repeated_onmf
+    preprocess_sampling
 )
 
 from util.plotting import (
@@ -191,6 +189,7 @@ class LargeDSPIN(AbstractDSPIN):
                     save_path: str,
                     num_spin: int = 10,
                     num_onmf_components: int = None,
+                    preprogram: list = None,
                     num_repeat: int = 10,
                     filter_threshold: float = 0.02):
             super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat, filter_threshold)
@@ -199,6 +198,7 @@ class LargeDSPIN(AbstractDSPIN):
             self._gene_matrix_large = None
             self._use_data_list = None
             self._gene_program_csv = None
+            self._preprogram = None
     
     @property
     def optimized_algorithm(self):
@@ -238,6 +238,12 @@ class LargeDSPIN(AbstractDSPIN):
     def __setattr__(self, name, value):
         if name == 'example_list':
             self._example_list = value
+        elif name == 'specific_hyperparams':
+            self._specific_hyperparams = value
+        elif name == 'optimized_algorithm':
+            self._optimized_algorithm = value
+        elif name == 'preprogram':
+            self._preprogram = value
         else:
             return super().__setattr__(name, value)
     
@@ -245,35 +251,18 @@ class LargeDSPIN(AbstractDSPIN):
         return super().__getattr__(name)
 
     def matrix_balance(self):
-        matrix_path_ori = prepare_onmf_decomposition(self.adata, self.save_path, balance_by='leiden', total_sample_size=2e4, method='squareroot')
-        cur_matrix = np.load(matrix_path_ori)
-        cur_std = cur_matrix.std(axis=0)
-        cur_std = cur_std.clip(np.percentile(cur_std, 20), np.inf)
-        cur_matrix /= cur_std
+        std, matrix_path = prepare_onmf_decomposition(self.adata, self.save_path)
+        cur_matrix = np.load(matrix_path)
         self.gene_matrix_large = cur_matrix
-        self.matrix_std = cur_std
+        self.matrix_std = std
 
     def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot'):
         #TODO: this huge function needs to be factored out
         adata = self.adata
+        preprogram = self.preprogram
         
-        if issparse(adata.X):
-            adata.X = adata.X.toarray()
+        sampling_number, cluster_list = preprocess_sampling(adata, balance_by, total_sample_size, method, maximum_sample_rate=2)
         
-        maximum_sample_rate = 2
-        cluster_list = list(adata.obs[balance_by].value_counts().keys())
-        cluster_count = list(adata.obs[balance_by].value_counts())
-
-        if method == 'porpotional':
-            weight_fun = cluster_count
-        elif method == 'squareroot':
-            esti_size = (np.sqrt(cluster_count) / np.sum(np.sqrt(cluster_count)) * total_sample_size).astype(int)
-            weight_fun = np.min([esti_size, maximum_sample_rate * np.array(cluster_count)], axis=0)
-        elif method == 'equal':
-            esti_size = total_sample_size / len(cluster_list)
-            weight_fun = np.min([esti_size * np.ones(len(cluster_count)), maximum_sample_rate * np.array(cluster_count)], axis=0)
-        sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
-
         gene_matrix_balanced = np.zeros((np.sum(sampling_number), adata.X.shape[1]))
 
         # Pre-computing num_repeat times

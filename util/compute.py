@@ -545,12 +545,9 @@ def preprocess_sampling(cadata, balance_by='leiden', total_sample_size=1e5, meth
 
     return sampling_number, cluster_list
 
-def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot', maximum_sample_rate = 2):
-    
-    sampling_number, cluster_list = preprocess_sampling(cadata, balance_by, total_sample_size, method, maximum_sample_rate)
-
+def balanced_gene_matrix(sampling_number, cluster_list, cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot'):
     gene_matrix_balanced = np.zeros((np.sum(sampling_number), cadata.X.shape[1]))
-
+    
     for ii in range(len(cluster_list)):
         cur_num = sampling_number[ii]
         cur_filt = cadata.obs[balance_by] == cluster_list[ii]
@@ -559,10 +556,22 @@ def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_s
         end_ind = strart_ind + cur_num
         gene_matrix_balanced[strart_ind: end_ind, :] = cadata.X[cur_filt, :][sele_ind, :]
 
-    matrix_path = data_folder + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '.npy'
-    np.save(matrix_path, gene_matrix_balanced)
+    std = gene_matrix_balanced.std(axis=0)
+    std_clipped = std.clip(np.percentile(std, 20), np.inf)
+    gene_matrix_balanced_normalized = gene_matrix_balanced / std_clipped
 
-    return matrix_path
+    matrix_path = data_folder + 'gmatrix_' + '{:.0e}'.format(total_sample_size) + '_balanced_' + method + '.npy'
+    np.save(gene_matrix_balanced_normalized, gene_matrix_balanced)
+
+    return std, matrix_path
+
+def prepare_onmf_decomposition(cadata, data_folder, balance_by='leiden', total_sample_size=1e5, method='squareroot', maximum_sample_rate = 2):
+    
+    sampling_number, cluster_list = preprocess_sampling(cadata, balance_by, total_sample_size, method, maximum_sample_rate)
+
+    std, matrix_path = balanced_gene_matrix(sampling_number, cluster_list, cadata, data_folder, balance_by, total_sample_size, method)
+
+    return std, matrix_path
 
 def select_diverse_sample(raw_data_tri, num_cluster, fig_folder):
 
