@@ -332,15 +332,13 @@ def learn_jmat_adam2(num_spin, state_list, train_dat, perturb_matrix_expand):
 
     all_gradients = []
 
-    #TODO: factor out parameters
-
     # Parameters
-    decay_rate = 0.001
-    num_iterations = 400
-    initial_learning_rate = 0.05
-    l1_j = 0.005
-    l1_thres = 0.02
-    l2_h = 2
+    decay_rate = train_dat["decay_rate"]
+    num_iterations = train_dat["num_iterations"]
+    initial_learning_rate = train_dat["initial_learning_rate"]
+    l1_j = train_dat["lam_l1j"]
+    l1_thres = train_dat["l1_thres"]
+    l2_h = train_dat["l2h"]
 
     # Hyperparameters for Adam
     beta1 = 0.9
@@ -484,6 +482,9 @@ def summarize_onmf_decomposition(num_spin, num_repeat, num_pool, onmf_path, gene
 
     onmf_summary = NMF(n_components=num_spin, init='random', random_state=0)
     onmf_summary.components_ = components_summary
+
+
+
 
     sc.set_figure_params(figsize=(12, 4))
     plt.subplot(1, 3, 1)

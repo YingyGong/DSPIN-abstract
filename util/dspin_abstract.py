@@ -258,7 +258,6 @@ class LargeDSPIN(AbstractDSPIN):
         self.matrix_std = std
 
     def onmf_abstract(self, balance_by='leiden', total_sample_size=2e4, method='squareroot'):
-        #TODO: this huge function needs to be factored out
         
         preprograms = self.preprograms
         adata = self.adata
