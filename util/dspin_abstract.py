@@ -47,7 +47,7 @@ class AbstractDSPIN(ABC):
         # Filter out low expressed genes
         self.filter_threshold = filter_threshold
         counts_threshold = int(adata.shape[0] * self.filter_threshold)
-        sc.pp.filter_genes(adata, min_counts=counts_threshold)
+        sc.pp.filter_genes(adata, min_cells==counts_threshold)
 
         self.adata = adata
         self.save_path = save_path
@@ -59,8 +59,8 @@ class AbstractDSPIN(ABC):
         else:
             self.num_onmf_components = num_onmf_components
 
-        if self.num_spin > 10:
-            warnings.warn("num_spin larger than 10 takes long time in Python. Please use computing clusters for larger num_spin.")
+        # if self.num_spin > 10:
+        #     warnings.warn("num_spin larger than 10 takes long time in Python. Please use computing clusters for larger num_spin.")
 
         if self.num_spin > self.num_onmf_components:
             raise ValueError("num_spin must be less than or equal to num_onmf_components.")
