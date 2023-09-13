@@ -125,7 +125,7 @@ class AbstractDSPIN(ABC):
         onmf_rep_tri = self.onmf_rep_tri
         save_path = self.save_path
         raw_data, samp_list = sample_corr_mean(adata.obs[sample_col_name], onmf_rep_tri)
-        self.raw_data = raw_data
+        self._raw_data = raw_data
         self.samp_list = samp_list
         
         filename = f"{save_path}data_raw.mat"
