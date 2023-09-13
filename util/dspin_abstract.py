@@ -14,6 +14,7 @@ import networkx as nx
 import matplotlib.patheffects as patheffects
 import warnings
 import itertools
+from typing import List
 
 from util.compute import (
     compute_onmf,
@@ -162,6 +163,15 @@ class SmallDSPIN(AbstractDSPIN):
     def onmf_rep_ori(self):
         return self.adata.X
     
+    def __setattr__(self, name, value):
+        if name == 'onmf_rep_ori':
+            self._onmf_rep_ori = value
+        else:
+            return super().__setattr__(name, value)
+    
+    def __getattr__(self, name):
+        return super().__getattr__(name)
+    
     def network_construct(self, 
                           specific_hyperparams: 
                           dict = {'epoch': 200, 'spin_thres': 16,
@@ -181,6 +191,7 @@ class SmallDSPIN(AbstractDSPIN):
         self.discretize()
         self.cross_corr(sample_col_name)
         self.network_construct()
+    
 
 
 
@@ -190,7 +201,7 @@ class LargeDSPIN(AbstractDSPIN):
                     save_path: str,
                     num_spin: int = 10,
                     num_onmf_components: int = None,
-                    preprogram: list = None,
+                    preprogram: List[List[str]] = None,
                     num_repeat: int = 10,
                     filter_threshold: float = 0.02):
             super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat, filter_threshold)
@@ -200,6 +211,7 @@ class LargeDSPIN(AbstractDSPIN):
             self._use_data_list = None
             self._gene_program_csv = None
             self._preprogram = None
+            self._preprogram_num = len(preprogram) if preprogram else 0
     
     @property
     def optimized_algorithm(self):

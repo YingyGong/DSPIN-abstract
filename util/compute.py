@@ -513,7 +513,7 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
     fig, grid = sc.pl._tools._panel_grid(0.3, 0.3, ncols=7, num_panels=num_spin)
     onmf_rep_tri = np.zeros(onmf_rep_ori.shape) 
     rec_kmeans = np.zeros(num_spin, dtype=object)
-    for ii in tqdm(range(num_spin)):
+    for ii in range(num_spin):
         ax = plt.subplot(grid[ii])
         
         km_fit = KMeans(n_clusters=3, n_init=10)
@@ -525,9 +525,9 @@ def onmf_discretize(onmf_rep_ori, fig_folder):
         onmf_rep_tri[:, ii] = (km_fit.labels_ == label_ord[0]) * (-1) + (km_fit.labels_ == label_ord[2]) * 1
         rec_kmeans[ii] = km_fit
 
-    # if fig_folder is not None:
-    #     plt.savefig(fig_folder + 'onmf_discretize.png', dpi=300, bbox_inches='tight')
-    #     plt.close(fig) # the plot is saved but now shown
+    if fig_folder:
+        plt.savefig(fig_folder + 'onmf_discretize.png', dpi=300, bbox_inches='tight')
+        plt.close() # the plot is saved but now shown
     
     
     return onmf_rep_tri
