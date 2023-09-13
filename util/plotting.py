@@ -11,6 +11,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import networkx as nx
+import leidenalg as la
+import igraph as ig
+from pyvis import network as net
 
 import csv 
 
@@ -170,6 +173,30 @@ def temporary_spin_name(csv_file):
     df = pd.read_csv(csv_file, header=None)
     spin_names = [ 'P' + '_'.join(df[col][:6]) for col in df.columns]
     return spin_names
+
+def spin_order(j_mat):
+    np.fill_diagonal(j_mat, 0)
+    
+    thres = 0
+    j_filt = j_mat.copy()
+    j_filt[np.abs(j_mat) < thres] = 0
+    np.fill_diagonal(j_filt, 0)
+    G = nx.from_numpy_array(j_filt)
+
+    G = ig.Graph.from_networkx(G)
+    G_pos = G.subgraph_edges(G.es.select(weight_gt = 0), delete_vertices=False);
+    G_neg = G.subgraph_edges(G.es.select(weight_lt = 0), delete_vertices=False);
+    G_neg.es['weight'] = [-w for w in G_neg.es['weight']]
+
+    part_pos = la.RBConfigurationVertexPartition(G_pos, weights='weight', resolution_parameter=2)
+    part_neg = la.RBConfigurationVertexPartition(G_neg, weights='weight', resolution_parameter=2)
+    optimiser = la.Optimiser()
+    diff = optimiser.optimise_partition_multiplex([part_pos, part_neg],layer_weights=[1,-1]);
+
+    net_class = list(part_pos)
+    spin_order = [spin for cur_list in net_class for spin in cur_list]
+    net_class_len = [len(cur_list) for cur_list in net_class]
+    return spin_order
 
 from sklearn.cluster import KMeans
 

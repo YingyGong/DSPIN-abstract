@@ -400,6 +400,7 @@ class LargeDSPIN(AbstractDSPIN):
 # Select the class to use
 class DSPIN(object):
     def __new__(cls, *args, **kwargs):
+        # Note: when initializing an object, please set 'num_spin' = the desired value in the arguments
         if kwargs['num_spin'] < 15:
             return SmallDSPIN(*args, **kwargs)
         else:
