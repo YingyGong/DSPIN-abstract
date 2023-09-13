@@ -47,7 +47,7 @@ class AbstractDSPIN(ABC):
         # Filter out low expressed genes
         self.filter_threshold = filter_threshold
         counts_threshold = int(adata.shape[0] * self.filter_threshold)
-        sc.pp.filter_genes(adata, min_cells==counts_threshold)
+        sc.pp.filter_genes(adata, min_cells=counts_threshold)
 
         self.adata = adata
         self.save_path = save_path
