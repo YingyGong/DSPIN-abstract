@@ -68,18 +68,44 @@ class AbstractDSPIN(ABC):
         if not os.path.exists(self.save_path):
             raise ValueError("save_path does not exist.")
         
-        self._network = None
-        self._responses = None
         self._onmf_rep_ori = None
         self._onmf_rep_tri = None
         self._raw_data = None
+        self._network = None
+        self._responses = None
     
-    # To add more restrictions/ check on the attributes
-    def __setattr__(self, name, value):
-        self.__dict__[name] = value
+    @property
+    def onmf_rep_ori(self):
+        return self._onmf_rep_ori
+    
+    # onmf_rep_tri has no setter because it is computed from onmf_rep_ori
+    @property
+    def onmf_rep_tri(self):
+        return self._onmf_rep_tri
+    
+    @property
+    def raw_data(self):
+        return self._raw_data
 
-    def __getattr__(self, name):
-        return self.__dict__.get(name)
+    @property
+    def network(self):
+        return self._network
+
+    @property
+    def responses(self):
+        return self._responses
+
+    @onmf_rep_ori.setter
+    def onmf_rep_ori(self, value):
+        self._onmf_rep_ori = value
+    
+    @network.setter
+    def network(self, value):
+        self._network = value
+    
+    @responses.setter
+    def responses(self, value):
+        self._responses = value
 
     def discretize(self) -> np.ndarray:
         """
@@ -92,7 +118,7 @@ class AbstractDSPIN(ABC):
         fig_folder = self.save_path + 'figs/'
         
         onmf_rep_tri = onmf_discretize(onmf_rep_ori, fig_folder)        
-        self.onmf_rep_tri = onmf_rep_tri
+        self._onmf_rep_tri = onmf_rep_tri
     
     def cross_corr(self, sample_col_name) -> np.ndarray:
         adata = self.adata
@@ -146,31 +172,25 @@ class AbstractDSPIN(ABC):
         pass
 
 
-
 class SmallDSPIN(AbstractDSPIN):
     def __init__(self, 
                  adata: anndata.AnnData,
                  save_path: str,
                  num_spin: int = 10,
                  num_onmf_components: int = None,
-                 num_repeat: int = 10):
-        super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat)
+                 num_repeat: int = 10,
+                 filter_threshold: float = 0.02):
+        super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat, filter_threshold)
         print("SmallDSPIN initialized.")
         self._onmf_rep_ori = adata.X
-
 
     @property
     def onmf_rep_ori(self):
         return self.adata.X
     
-    def __setattr__(self, name, value):
-        if name == 'onmf_rep_ori':
-            self._onmf_rep_ori = value
-        else:
-            return super().__setattr__(name, value)
-    
-    def __getattr__(self, name):
-        return super().__getattr__(name)
+    @onmf_rep_ori.setter
+    def onmf_rep_ori(self, value):
+        self._onmf_rep_ori = value
     
     def network_construct(self, 
                           specific_hyperparams: 
@@ -209,9 +229,33 @@ class LargeDSPIN(AbstractDSPIN):
             self._onmf_summary = None
             self._gene_matrix_large = None
             self._use_data_list = None
-            self._gene_program_csv = None
-            self._preprogram = None
-            self._preprogram_num = len(preprogram) if preprogram else 0
+            self.gene_program_csv = None
+            self.preprogram = None
+            self.preprogram_num = len(preprogram) if preprogram else 0
+    
+    @property
+    def onmf_summary(self):
+        return self._onmf_summary
+    
+    @onmf_summary.setter
+    def onmf_summary(self, value):
+        self._onmf_summary = value
+
+    @property
+    def gene_matrix_large(self):
+        return self._gene_matrix_large
+    
+    @gene_matrix_large.setter
+    def gene_matrix_large(self, value):
+        self._gene_matrix_large = value
+    
+    @property
+    def use_data_list(self):
+        return self._use_data_list
+    
+    @use_data_list.setter
+    def use_data_list(self, value):
+        self._use_data_list = value
     
     @property
     def optimized_algorithm(self):
@@ -247,21 +291,6 @@ class LargeDSPIN(AbstractDSPIN):
     @example_list.setter
     def example_list(self, value):
         self._example_list = value
-    
-    def __setattr__(self, name, value):
-        if name == 'example_list':
-            self._example_list = value
-        elif name == 'specific_hyperparams':
-            self._specific_hyperparams = value
-        elif name == 'optimized_algorithm':
-            self._optimized_algorithm = value
-        elif name == 'preprogram':
-            self._preprogram = value
-        else:
-            return super().__setattr__(name, value)
-    
-    def __getattr__(self, name):
-        return super().__getattr__(name)
 
     def matrix_balance(self):
         std, matrix_path = prepare_onmf_decomposition(self.adata, self.save_path)
