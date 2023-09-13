@@ -47,7 +47,8 @@ class AbstractDSPIN(ABC):
         # Filter out low expressed genes
         self.filter_threshold = filter_threshold
         counts_threshold = int(adata.shape[0] * self.filter_threshold)
-        sc.pp.filter_genes(adata, min_cells==counts_threshold)
+        sc.pp.filter_genes(adata, min_cells=counts_threshold)
+        # TODO: when genes are remove, write notice to "# of genes are filtered due to rare expression" 
 
         self.adata = adata
         self.save_path = save_path
@@ -63,10 +64,12 @@ class AbstractDSPIN(ABC):
         #     warnings.warn("num_spin larger than 10 takes long time in Python. Please use computing clusters for larger num_spin.")
 
         if self.num_spin > self.num_onmf_components:
-            raise ValueError("num_spin must be less than or equal to num_onmf_components.")
+            raise ValueError("Number of programs must be less than or equal to num_onmf_components.")
         
         if not os.path.exists(self.save_path):
-            raise ValueError("save_path does not exist.")
+            os.makedirs(self.save_path)
+            # raise ValueError("save_path does not exist.")
+            print("Saving path does not exist. Creating a new folder.")
         
         self._onmf_rep_ori = None
         self._onmf_rep_tri = None
