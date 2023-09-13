@@ -221,7 +221,7 @@ class LargeDSPIN(AbstractDSPIN):
                     save_path: str,
                     num_spin: int = 10,
                     num_onmf_components: int = None,
-                    preprogram: List[List[str]] = None,
+                    preprograms: List[List[str]] = None,
                     num_repeat: int = 10,
                     filter_threshold: float = 0.02):
             super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat, filter_threshold)
@@ -230,8 +230,8 @@ class LargeDSPIN(AbstractDSPIN):
             self._gene_matrix_large = None
             self._use_data_list = None
             self.gene_program_csv = None
-            self.preprogram = None
-            self.preprogram_num = len(preprogram) if preprogram else 0
+            self.preprograms = None
+            self.preprogram_num = len(preprograms) if preprograms else 0
     
     @property
     def onmf_summary(self):
