@@ -1,1 +1,4 @@
 large_data/*
+test/*
+util/__pycache__/*
+*.ipynb
