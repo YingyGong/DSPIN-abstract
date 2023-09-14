@@ -51,7 +51,7 @@ class AbstractDSPIN(ABC):
         # TODO: when genes are remove, write notice to "# of genes are filtered due to rare expression" 
 
         self.adata = adata
-        self.save_path = save_path
+        self.save_path = os.abspath(save_path) + '/'
         self.num_spin = num_spin
         self.num_repeat = num_repeat
         
@@ -68,8 +68,12 @@ class AbstractDSPIN(ABC):
         
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
-            # raise ValueError("save_path does not exist.")
             print("Saving path does not exist. Creating a new folder.")
+
+        self.fig_folder = self.save_path + 'figs/'
+        if not os.path.exists(self.fig_folder):
+            os.makedirs(self.fig_folder)
+            print("Figure folder does not exist. Creating a new folder.")
         
         self._onmf_rep_ori = None
         self._onmf_rep_tri = None
@@ -118,7 +122,7 @@ class AbstractDSPIN(ABC):
         - np.ndarray: The discretized ONMF representation.
         """
         onmf_rep_ori = self.onmf_rep_ori
-        fig_folder = self.save_path + 'figs/'
+        fig_folder = self.fig_folder
         
         onmf_rep_tri = onmf_discretize(onmf_rep_ori, fig_folder)        
         self._onmf_rep_tri = onmf_rep_tri
@@ -142,7 +146,6 @@ class AbstractDSPIN(ABC):
             example_list_ind = [list(self.samp_list).index(samp) for samp in example_list]
             raw_data = raw_data[example_list_ind]
 
-        num_spin = raw_data[0][0].shape[0]
         num_samp = len(raw_data)
         rec_all_corr = np.zeros((num_spin, num_spin, num_samp))
         rec_all_mean = np.zeros((num_spin, num_samp))
