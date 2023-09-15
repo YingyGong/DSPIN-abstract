@@ -48,7 +48,7 @@ from util.plotting import (
 from util.compute_new import (
     onmf_discretize,
     sample_corr_mean,
-    learn_jmat_adam
+    learn_network_adam
 )
 
 class AbstractDSPIN(ABC):
@@ -134,18 +134,21 @@ class AbstractDSPIN(ABC):
         raw_data = self.raw_data
 
         if self.example_list is not None:
-            example_list_ind = [list(self.samp_list).index(samp) for samp in example_list]
+            example_list_ind = [list(self.samp_list).index(samp) for samp in self.example_list]
             raw_data = raw_data[example_list_ind]
         
         num_sample = len(raw_data)
-
-        params = {'epoch': 200, 
-                  'cur_j': np.zero((num_spin, num_spin)),
-                  'lambda_l1_j': 0.01,
-                  'lambda_l1_h': 0,
-                  'lambda_l2_j': 0,
-                  'lambda_l2_h': 0.05,
-                  'lambda_prior_h': 0}
+        params = {'num_epoch': 200, 
+                  'cur_j': np.zeros((num_spin, num_spin)),
+                  'cur_h': np.zeros((num_spin, num_sample)),
+                  'save_path': self.save_path}
+        params.update({'lambda_l1_j': 0.01,
+                       'lambda_l1_h': 0,
+                       'lambda_l2_j': 0,
+                       'lambda_l2_h': 0.05,
+                       'lambda_prior_h': 0})
+        params.update({'backtrack_gap': 20,
+                       'backtrack_tol': 4})
 
         if method == 'maximum_likelihood':
             params['stepsz'] = 0.1
@@ -184,15 +187,16 @@ class AbstractDSPIN(ABC):
         if method == 'pseudo_likelihood':
             self.raw_data_state()
         else: 
-            self.raw_data_corr()
+            self.raw_data_corr(sample_col_name)
 
-        if example_list is not None:
-            self.example_list = example_list
+        self.example_list = example_list
 
         train_dat = self.default_params(method)
-        train_dat.update(params)
+        train_dat['rec_gap'] = record_step
+        if params is not None:
+            train_dat.update(params)
 
-        cur_j, cur_h = learn_jmat_adam(self.raw_data, train_dat)
+        cur_j, cur_h = learn_network_adam(self.raw_data, method, train_dat)
         self._network = cur_j
         self._responses = cur_h
 
@@ -244,16 +248,23 @@ class DSPIN(object):
 
 if __name__ == "__main__":
     
+    ''' 
     data_folder = 'data/HSC_simulation/'
 
-    cadata = ad.read_h5ad(data_folder + 'hsc_simulation_with_perturbations.h5ad')
+    cadata = ad.read_h5ad(data_folder + 'hsc_simulation_with_perturbations_small.h5ad')
 
-    random_select = np.random.choice(cadata.shape[0], 10000, replace=False)
-    cadata = cadata[random_select, :].copy()
+    # random_select = np.random.choice(cadata.shape[0], 10000, replace=False)
+    # cadata = cadata[random_select, :].copy()
+
+    # cadata.write(data_folder + 'hsc_simulation_with_perturbations_small.h5ad')
 
     save_path = 'test/hsc_test0912'
+
+    samp_list = np.unique(cadata.obs['sample_id'])
+    subset_list = samp_list[: 3]
 
     num_spin = cadata.shape[1]
     model = DSPIN(cadata, save_path, num_spin=num_spin)
 
-    model.network_infer(sample_col_name = 'sample_id')
+    model.network_infer(sample_col_name='sample_id', example_list=subset_list)
+'''
