@@ -13,6 +13,23 @@ from sklearn.cluster import KMeans
 import scipy.io as sio
 
 
+def category_balance_number(total_sample_size, cluster_count, method, maximum_sample_rate):
+    if method not in ['equal', 'proportional', 'squareroot']:
+        raise ValueError('method must be one of equal, proportional, squareroot')
+    
+    if method == 'squareroot':
+        esti_size = (np.sqrt(cluster_count) / np.sum(np.sqrt(cluster_count)) * total_sample_size).astype(int)
+        weight_fun = np.min([esti_size, maximum_sample_rate * np.array(cluster_count)], axis=0)
+    elif method == 'equal':
+        esti_size = total_sample_size / len(cluster_count)
+        weight_fun = np.min([esti_size * np.ones(len(cluster_count)), maximum_sample_rate * np.array(cluster_count)], axis=0)
+    else:
+        weight_fun = cluster_count
+
+    sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
+    return sampling_number
+
+
 
 def onmf_discretize(onmf_rep_ori, fig_folder):
 

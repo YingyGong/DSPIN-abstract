@@ -48,7 +48,8 @@ from util.plotting import (
 from util.compute_new import (
     onmf_discretize,
     sample_corr_mean,
-    learn_network_adam
+    learn_network_adam,
+    category_balance_number
 )
 
 class AbstractDSPIN(ABC):
@@ -67,11 +68,6 @@ class AbstractDSPIN(ABC):
         self.fig_folder = self.save_path + 'figs/'
         os.makedirs(self.fig_folder, exist_ok=True)
 
-        self._onmf_rep_ori = None
-        self._onmf_rep_tri = None
-        self._raw_data = None
-        self._network = None
-        self._responses = None
 
     @property
     def onmf_rep_ori(self):
@@ -217,7 +213,7 @@ class LargeDSPIN(AbstractDSPIN):
                  num_onmf_components: int = None,
                  preprograms: List[List[str]] = None,
                  num_repeat: int = 10):
-            super().__init__(adata, save_path, num_spin, num_onmf_components, num_repeat)
+            super().__init__(adata, save_path, num_spin)
 
             print("LargeDSPIN initialized.")
 
@@ -227,6 +223,69 @@ class LargeDSPIN(AbstractDSPIN):
             self.gene_program_csv = None
             self.preprograms = None
             self.preprogram_num = len(preprograms) if preprograms else 0
+
+    def subsample_matrix_balance(self, 
+                                 balance_by: str,
+                                 total_sample_size: int, 
+                                 method: str, 
+                                 maximum_sample_rate,
+                                 std_clip_percentile: float = 20) -> (np.ndarray, np.ndarray):
+        
+        gene_matrix = self.adata.X
+        cadata = self.adata
+        num_gene, num_cell = gene_matrix.shape
+
+        if method == None:
+            gene_matrix_balanced = gene_matrix[:, np.random.choice(num_cell, total_sample_size, replace=False)]
+        else:
+            cluster_list = list(cadata.obs[balance_by].value_counts().keys())
+            cluster_count = list(cadata.obs[balance_by].value_counts())
+
+            sampling_number = category_balance_number(total_sample_size, cluster_count, method, maximum_sample_rate)
+            sampling_number = np.sum(sampling_number)
+
+            gene_matrix_balanced = np.zeros((np.sum(sampling_number), cadata.X.shape[1]))
+    
+            for ii in range(len(cluster_list)):
+                cur_num = sampling_number[ii]
+                cur_filt = cadata.obs[balance_by] == cluster_list[ii]
+                sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
+                strart_ind = np.sum(sampling_number[:ii])
+                end_ind = strart_ind + cur_num
+                gene_matrix_balanced[strart_ind: end_ind, :] = cadata.X[cur_filt, :][sele_ind, :]
+
+        std = gene_matrix_balanced.std(axis=0)
+        std_clipped = std.clip(np.percentile(std, std_clip_percentile), np.inf)
+        gene_matrix_balanced_normalized = gene_matrix_balanced / std_clipped
+
+        return std, gene_matrix_balanced_normalized
+                                 
+
+    def gene_program_discovery(self, 
+                               num_onmf_components: int = None,
+                               num_subsample: int = 10000,
+                               num_subsample_large: int = None,
+                               num_repeat: int = 10,
+                               balance_obs: str = None,
+                               balance_method: str = 'squareroot',
+                               max_sample_rate: float = 2,):
+        
+        if num_onmf_components is None:
+            num_onmf_components = self.num_spin
+
+        if num_subsample_large is None:
+            num_subsample_large = min(num_subsample * 5, self.adata.shape[0] * 2)
+
+
+        self.matrix_std, self.large_subsample_matrix = self.subsample_matrix_balance(balance_obs, num_subsample_large, balance_method, max_sample_rate)
+
+        self.compute_onmf_repeats()
+
+        self.summarize_onmf_result()
+
+        
+
+
                 
 class DSPIN(object):
     def __new__(cls, 
@@ -247,6 +306,17 @@ class DSPIN(object):
         
 
 if __name__ == "__main__":
+
+
+    data_folder = 'data/thomsonlab_signaling/'
+    large_data_folder = 'large_data/thomsonlab_signaling/'
+
+    cadata = ad.read_h5ad(large_data_folder + 'thomsonlab_signaling_filtered_2500_scvi_umap.h5ad')
+
+    save_path = "test/test_signalling_0913/"
+
+    num_spin = 10
+    model = DSPIN(cadata, save_path, num_spin=num_spin)
     
     ''' 
     data_folder = 'data/HSC_simulation/'
