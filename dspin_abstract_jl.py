@@ -49,7 +49,9 @@ from util.compute_new import (
     onmf_discretize,
     sample_corr_mean,
     learn_network_adam,
-    category_balance_number
+    category_balance_number,
+    compute_onmf,
+    summary_components
 )
 
 class AbstractDSPIN(ABC):
@@ -225,18 +227,19 @@ class LargeDSPIN(AbstractDSPIN):
             self.preprogram_num = len(preprograms) if preprograms else 0
 
     def subsample_matrix_balance(self, 
-                                 balance_by: str,
                                  total_sample_size: int, 
-                                 method: str, 
-                                 maximum_sample_rate,
                                  std_clip_percentile: float = 20) -> (np.ndarray, np.ndarray):
         
         gene_matrix = self.adata.X
         cadata = self.adata
-        num_gene, num_cell = gene_matrix.shape
+        num_cell, num_gene = gene_matrix.shape
+
+        balance_by = self.balance_obs
+        method = self.balance_method
+        maximum_sample_rate = self.max_sample_rate
 
         if method == None:
-            gene_matrix_balanced = gene_matrix[:, np.random.choice(num_cell, total_sample_size, replace=False)]
+            gene_matrix_balanced = gene_matrix[np.random.choice(num_cell, total_sample_size, replace=False), :]
         else:
             cluster_list = list(cadata.obs[balance_by].value_counts().keys())
             cluster_count = list(cadata.obs[balance_by].value_counts())
@@ -254,12 +257,68 @@ class LargeDSPIN(AbstractDSPIN):
                 end_ind = strart_ind + cur_num
                 gene_matrix_balanced[strart_ind: end_ind, :] = cadata.X[cur_filt, :][sele_ind, :]
 
+        if issparse(gene_matrix_balanced):
+            gene_matrix_balanced = gene_matrix_balanced.toarray()
+
         std = gene_matrix_balanced.std(axis=0)
         std_clipped = std.clip(np.percentile(std, std_clip_percentile), np.inf)
         gene_matrix_balanced_normalized = gene_matrix_balanced / std_clipped
 
-        return std, gene_matrix_balanced_normalized
+        return std_clipped, gene_matrix_balanced_normalized
                                  
+    def compute_onmf_repeats(self, 
+                             num_onmf_components: int,
+                             num_repeat: int,
+                             num_subsample: int,
+                             seed: int = 0,
+                             std_clip_percentile: float = 20):
+
+        preprograms = self.prior_programs
+        adata = self.adata
+        os.makedirs(self.save_path + 'onmf/', exist_ok=True)
+
+        print("Computing ONMF decomposition...")
+        
+        for ii in range(num_repeat):
+            np.random.seed(seed + ii)
+            _, gene_matrix_norm = self.subsample_matrix_balance(num_subsample, std_clip_percentile=std_clip_percentile)
+
+            current_onmf = compute_onmf(seed + ii, num_onmf_components, gene_matrix_norm[:, self.prior_programs_mask])
+            np.save(self.save_path + 'onmf/onmf_rep_{}_{}.npy'.format(num_onmf_components, ii), current_onmf)
+
+    def summarize_onmf_result(self, 
+                              num_onmf_components: int,
+                              num_repeat: int,
+                              summary_method: str):
+        num_spin = self.num_spin
+        adata = self.adata
+        prior_programs_mask = self.prior_programs_mask
+
+        rec_components = np.zeros((num_repeat, num_onmf_components, np.sum(prior_programs_mask)))
+
+        for ii in range(num_repeat):
+            cur_onmf = np.load(self.save_path + 'onmf/onmf_rep_{}_{}.npy'.format(num_onmf_components, ii), allow_pickle=True).item()
+            rec_components[ii] = cur_onmf.components_
+
+        all_components = rec_components.reshape(-1, np.sum(prior_programs_mask))
+
+        gene_group_ind = summary_components(all_components, num_spin, summary_method=summary_method)
+
+        sub_mask_ind = np.where(prior_programs_mask)[0]
+        gene_group_ind = [sub_mask_ind[gene_list] for gene_list in gene_group_ind]
+        gene_group_ind += self.prior_programs_ind
+
+        components_summary = np.zeros((num_spin, adata.shape[1]))
+        for ii in range(num_spin):
+            sub_matrix = self.large_subsample_matrix[:, gene_group_ind[ii]]
+            sub_onmf = NMF(n_components=1, init='random', random_state=0).fit(sub_matrix)
+            components_summary[ii, gene_group_ind[ii]] = sub_onmf.components_
+
+        components_summary = normalize(components_summary, axis=1, norm='l2')
+        onmf_summary = NMF(n_components=num_spin, init='random', random_state=0)
+        onmf_summary.components_ = components_summary
+
+        return onmf_summary
 
     def gene_program_discovery(self, 
                                num_onmf_components: int = None,
@@ -267,21 +326,54 @@ class LargeDSPIN(AbstractDSPIN):
                                num_subsample_large: int = None,
                                num_repeat: int = 10,
                                balance_obs: str = None,
-                               balance_method: str = 'squareroot',
-                               max_sample_rate: float = 2,):
+                               balance_method: str = None,
+                               max_sample_rate: float = 2,
+                               prior_programs: List[List[str]] = None, 
+                               summary_method: str = 'kmeans',):
         
-        if num_onmf_components is None:
-            num_onmf_components = self.num_spin
+        if balance_method not in ['equal', 'proportional', 'squareroot', None]:
+            raise ValueError('balance_method must be one of equal, proportional, squareroot, or None')
+        
+        if summary_method not in ['kmeans', 'leiden']:
+            raise ValueError('summary_method must be one of kmeans or leiden')
+               
+        adata = self.adata
 
         if num_subsample_large is None:
-            num_subsample_large = min(num_subsample * 5, self.adata.shape[0] * 2)
+            num_subsample_large = min(num_subsample * 5, self.adata.shape[0])
 
+        if (balance_obs is not None) & (balance_method is None):
+            balance_method = 'squareroot'
 
-        self.matrix_std, self.large_subsample_matrix = self.subsample_matrix_balance(balance_obs, num_subsample_large, balance_method, max_sample_rate)
+        self.balance_obs = balance_obs
+        self.balance_method = balance_method
+        self.max_sample_rate = max_sample_rate
+        self.prior_programs = prior_programs
 
-        self.compute_onmf_repeats()
+        if prior_programs is not None:
+            prior_program_ind = [
+                [np.where(adata.var_names == gene)[0] for gene in gene_list]
+                for gene_list in prior_programs]
+            preprogram_flat = [gene for program in prior_programs for gene in program]
+            if len(preprogram_flat) > num_spin:
+                raise ValueError('Number of preprograms must be less than the number of spins')
+            prior_program_mask = ~ np.isin(adata.var_names, preprogram_flat)
+        else:
+            prior_program_mask = np.ones(adata.shape[1], dtype=bool)
+            prior_program_ind = []
 
-        self.summarize_onmf_result()
+        if num_onmf_components is None:
+            num_onmf_components = self.num_spin - len(prior_program_ind)
+
+        self.prior_programs_mask = prior_program_mask
+        self.prior_programs_ind = prior_program_ind
+
+        self.matrix_std, self.large_subsample_matrix = self.subsample_matrix_balance(num_subsample_large, std_clip_percentile=20)
+
+        self.compute_onmf_repeats(num_onmf_components, num_repeat, num_subsample, std_clip_percentile=20)
+
+        onmf_summary = self.summarize_onmf_result(num_onmf_components, num_repeat, summary_method)
+        self._onmf_summary = onmf_summary
 
         
 
@@ -311,12 +403,22 @@ if __name__ == "__main__":
     data_folder = 'data/thomsonlab_signaling/'
     large_data_folder = 'large_data/thomsonlab_signaling/'
 
+    ''' 
     cadata = ad.read_h5ad(large_data_folder + 'thomsonlab_signaling_filtered_2500_scvi_umap.h5ad')
+
+    random_select = np.random.choice(cadata.shape[0], 10000, replace=False)
+    gene_select = np.random.choice(cadata.shape[1], 500, replace=False)
+    cadata = cadata[random_select, :][:, gene_select].copy()
+    cadata.write(large_data_folder + 'thomsonlab_signaling_filtered_2500_scvi_umap_small.h5ad')
+    
+    '''
+    cadata = ad.read_h5ad(large_data_folder + 'thomsonlab_signaling_filtered_2500_scvi_umap_small.h5ad')
 
     save_path = "test/test_signalling_0913/"
 
     num_spin = 10
     model = DSPIN(cadata, save_path, num_spin=num_spin)
+    model.gene_program_discovery()
     
     ''' 
     data_folder = 'data/HSC_simulation/'

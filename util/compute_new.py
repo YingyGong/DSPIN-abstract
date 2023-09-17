@@ -11,6 +11,7 @@ import anndata as ad
 import os
 from sklearn.cluster import KMeans
 import scipy.io as sio
+from tqdm import tqdm
 
 
 def category_balance_number(total_sample_size, cluster_count, method, maximum_sample_rate):
@@ -29,7 +30,76 @@ def category_balance_number(total_sample_size, cluster_count, method, maximum_sa
     sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
     return sampling_number
 
+from sklearn.preprocessing import normalize
 
+def summary_components(all_components, num_spin, summary_method='kmeans'):
+    
+    num_gene = all_components.shape[1]
+
+    if summary_method == 'kmeans':
+        kmeans = KMeans(n_clusters=num_spin, random_state=0, n_init=50).fit(all_components)
+        kmeans_gene = KMeans(n_clusters=2 * num_spin, random_state=0, n_init=10).fit(all_components.T)
+
+        components_kmeans = np.zeros((num_spin, num_gene))
+        for ii in range(num_spin):
+            components_kmeans[ii] = np.mean(all_components[kmeans.labels_ == ii], axis=0)
+        components_kmeans = normalize(components_kmeans, axis=1, norm='l2')
+
+        gene_groups_ind = []
+        for ii in range(num_spin):
+            gene_groups_ind.append(np.argmax(components_kmeans, axis=0) == ii)
+
+    return gene_groups_ind
+    
+from scipy.linalg import orth 
+from sklearn.decomposition import NMF
+
+def onmf(X, rank, max_iter=100):
+    
+    m, n = X.shape
+    
+    A = np.random.rand(m, rank) 
+    S = np.random.rand(rank, n)
+    S = np.abs(orth(S.T).T)
+    
+    pbar = tqdm(total=max_iter, desc = "Iteration Progress")
+
+    for itr in range(max_iter):
+            
+        coef_A = X.dot(S.T) / A.dot(S.dot(S.T))
+        A = np.nan_to_num(A * coef_A) #, posinf=1e5)
+
+        AtX = A.T.dot(X)
+        coef_S = AtX / S.dot(AtX.T).dot(S)
+        S = np.nan_to_num(S * coef_S) #, posinf=1e5)
+
+        pbar.update(1)
+
+        if itr % 10 == 0:
+            error = np.linalg.norm(X - np.dot(A, S), 'fro')
+            pbar.set_postfix({"Reconstruction Error": f"{error:.2f}"})
+
+    
+    pbar.close()
+
+    norm_fac = np.sqrt(np.diag(S.dot(S.T)))
+    S = S / norm_fac.reshape(- 1, 1)
+    A = A * norm_fac.reshape(1, - 1)
+    
+    as_prod = A.dot(S)
+    const = np.sum(X * as_prod) / np.sum(as_prod ** 2)
+    A *= const
+
+    return S.T, A
+
+def compute_onmf(seed, num_spin, gene_matrix_bin):
+    np.random.seed(seed)
+    H, W = onmf(gene_matrix_bin, num_spin)
+
+    nmf_model = NMF(n_components=num_spin, random_state=seed)
+    nmf_model.components_ = np.array(H).T
+    nmf_model.n_components_ = num_spin
+    return nmf_model
 
 def onmf_discretize(onmf_rep_ori, fig_folder):
 
