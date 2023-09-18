@@ -54,6 +54,10 @@ from util.compute_new import (
     summary_components
 )
 
+from util.plot_new import (
+    onmf_to_csv
+)
+
 class AbstractDSPIN(ABC):
     def __init__(self, 
                  adata: ad.AnnData,
@@ -123,7 +127,20 @@ class AbstractDSPIN(ABC):
         self.samp_list = samp_list
 
     def raw_data_state(self, sample_col_name) -> np.ndarray:
-        pass
+
+        cadata = self.adata
+        onmf_rep_tri = self.onmf_rep_tri   
+
+        samp_list = np.unique(cadata)
+        state_list = []
+
+        for cur_samp in samp_list:
+            cur_filt = cadata.obs[sample_col_name] == cur_samp
+            cur_state = self.onmf_rep_tri[cur_filt, :]
+            state_list.append(cur_state.T)
+        
+        self._raw_data = state_list
+        self.samp_list = samp_list
 
     def default_params(self, 
                        method: str) -> dict:
@@ -183,7 +200,7 @@ class AbstractDSPIN(ABC):
         self.discretize()
 
         if method == 'pseudo_likelihood':
-            self.raw_data_state()
+            self.raw_data_state(sample_col_name)
         else: 
             self.raw_data_corr(sample_col_name)
 
@@ -245,7 +262,6 @@ class LargeDSPIN(AbstractDSPIN):
             cluster_count = list(cadata.obs[balance_by].value_counts())
 
             sampling_number = category_balance_number(total_sample_size, cluster_count, method, maximum_sample_rate)
-            sampling_number = np.sum(sampling_number)
 
             gene_matrix_balanced = np.zeros((np.sum(sampling_number), cadata.X.shape[1]))
     
@@ -255,10 +271,10 @@ class LargeDSPIN(AbstractDSPIN):
                 sele_ind = np.random.choice(np.sum(cur_filt), cur_num)
                 strart_ind = np.sum(sampling_number[:ii])
                 end_ind = strart_ind + cur_num
-                gene_matrix_balanced[strart_ind: end_ind, :] = cadata.X[cur_filt, :][sele_ind, :]
-
-        if issparse(gene_matrix_balanced):
-            gene_matrix_balanced = gene_matrix_balanced.toarray()
+                if issparse(cadata.X):
+                    gene_matrix_balanced[strart_ind: end_ind, :] = cadata.X[cur_filt, :][sele_ind, :].toarray()
+                else:
+                    gene_matrix_balanced[strart_ind: end_ind, :] = cadata.X[cur_filt, :][sele_ind, :]
 
         std = gene_matrix_balanced.std(axis=0)
         std_clipped = std.clip(np.percentile(std, std_clip_percentile), np.inf)
@@ -281,6 +297,9 @@ class LargeDSPIN(AbstractDSPIN):
         
         for ii in range(num_repeat):
             np.random.seed(seed + ii)
+            if os.path.exists(self.save_path + 'onmf/onmf_rep_{}_{}.npy'.format(num_onmf_components, ii)):
+                print("ONMF decomposition {} already exists. Skipping...".format(ii))
+                continue
             _, gene_matrix_norm = self.subsample_matrix_balance(num_subsample, std_clip_percentile=std_clip_percentile)
 
             current_onmf = compute_onmf(seed + ii, num_onmf_components, gene_matrix_norm[:, self.prior_programs_mask])
@@ -302,7 +321,7 @@ class LargeDSPIN(AbstractDSPIN):
 
         all_components = rec_components.reshape(-1, np.sum(prior_programs_mask))
 
-        gene_group_ind = summary_components(all_components, num_spin, summary_method=summary_method)
+        gene_group_ind = summary_components(all_components, num_onmf_components, summary_method=summary_method)
 
         sub_mask_ind = np.where(prior_programs_mask)[0]
         gene_group_ind = [sub_mask_ind[gene_list] for gene_list in gene_group_ind]
@@ -352,10 +371,10 @@ class LargeDSPIN(AbstractDSPIN):
 
         if prior_programs is not None:
             prior_program_ind = [
-                [np.where(adata.var_names == gene)[0] for gene in gene_list]
+                [np.where(adata.var_names == gene)[0][0] for gene in gene_list]
                 for gene_list in prior_programs]
             preprogram_flat = [gene for program in prior_programs for gene in program]
-            if len(preprogram_flat) > num_spin:
+            if len(prior_programs) > num_spin:
                 raise ValueError('Number of preprograms must be less than the number of spins')
             prior_program_mask = ~ np.isin(adata.var_names, preprogram_flat)
         else:
@@ -374,6 +393,15 @@ class LargeDSPIN(AbstractDSPIN):
 
         onmf_summary = self.summarize_onmf_result(num_onmf_components, num_repeat, summary_method)
         self._onmf_summary = onmf_summary
+
+        onmf_to_csv(onmf_summary.components_, adata.var_names, self.save_path + 'gene_programs_{}_{}_{}.csv'.format(len(prior_program_ind), num_onmf_components, num_spin), thres=0.01)
+
+        gene_matrix = self.adata.X
+        if issparse(gene_matrix):
+            gene_matrix = np.asarray(gene_matrix.toarray()).astype(np.float64)
+        self._onmf_rep_ori = onmf_summary.transform(gene_matrix / self.matrix_std)
+
+
 
         
 
@@ -416,9 +444,18 @@ if __name__ == "__main__":
 
     save_path = "test/test_signalling_0913/"
 
+    samp_list = np.unique(cadata.obs['sample_id'])
+    subset_list = samp_list[: 3]
+
     num_spin = 10
+    num_spin = 30
     model = DSPIN(cadata, save_path, num_spin=num_spin)
-    model.gene_program_discovery()
+
+    # prior_programs = ['CD3D PTPRCAP IL7R LCK PRDX2 ETS1 S1PR4'.split(' '), 'ACTB FTH1 CYBA'.split(' '), ['IRF1']] 
+
+    # model.gene_program_discovery(balance_obs='leiden', prior_programs=prior_programs)
+    model.gene_program_discovery(balance_obs='leiden')
+    model.network_infer(sample_col_name='sample_id', example_list=subset_list)
     
     ''' 
     data_folder = 'data/HSC_simulation/'
