@@ -131,13 +131,13 @@ class AbstractDSPIN(ABC):
         cadata = self.adata
         onmf_rep_tri = self.onmf_rep_tri   
 
-        samp_list = np.unique(cadata)
-        state_list = []
+        samp_list = np.unique(cadata.obs[sample_col_name])
+        state_list = np.zeros(len(samp_list), dtype=object)
 
-        for cur_samp in samp_list:
+        for ii, cur_samp in enumerate(samp_list):
             cur_filt = cadata.obs[sample_col_name] == cur_samp
             cur_state = self.onmf_rep_tri[cur_filt, :]
-            state_list.append(cur_state.T)
+            state_list[ii] = cur_state.T
         
         self._raw_data = state_list
         self.samp_list = samp_list
@@ -168,9 +168,10 @@ class AbstractDSPIN(ABC):
         if method == 'maximum_likelihood':
             params['stepsz'] = 0.1
         elif method == 'mcmc_maximum_likelihood':
-            params['stepsz'] = 0.025
-            params['mcmc_samplingsz'] = 1e5
+            params['stepsz'] = 0.01
+            params['mcmc_samplingsz'] = 2e5
             params['mcmc_samplingmix'] = 1e3
+            params['mcmc_samplegap'] = 1
         else:
             params['stepsz'] = 0.05
 
@@ -449,6 +450,7 @@ if __name__ == "__main__":
 
     num_spin = 10
     num_spin = 30
+    num_spin = 20
     model = DSPIN(cadata, save_path, num_spin=num_spin)
 
     # prior_programs = ['CD3D PTPRCAP IL7R LCK PRDX2 ETS1 S1PR4'.split(' '), 'ACTB FTH1 CYBA'.split(' '), ['IRF1']] 

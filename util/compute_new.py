@@ -175,6 +175,125 @@ def para_moments(j_mat, h_vec):
 
     return corr_para, mean_para
 
+import numba
+
+@numba.njit
+def np_apply_along_axis(func1d, axis, arr):
+  assert arr.ndim == 2
+  assert axis in [0, 1]
+  if axis == 0:
+    result = np.empty(arr.shape[1])
+    for i in range(len(result)):
+      result[i] = func1d(arr[:, i])
+  else:
+    result = np.empty(arr.shape[0])
+    for i in range(len(result)):
+      result[i] = func1d(arr[i, :])
+  return result
+
+@numba.njit
+def np_mean(array, axis):
+  return np_apply_along_axis(np.mean, axis, array)
+
+@numba.jit()
+def pseudol_gradient(cur_j, cur_h, cur_state):
+    num_spin = cur_j.shape[0]
+
+    cur_j_grad = np.zeros((num_spin, num_spin))
+    cur_h_grad = np.zeros((num_spin, 1))
+
+    j_filt = cur_j.copy()
+    np.fill_diagonal(j_filt, 0)
+    effective_h = j_filt.dot(cur_state) + cur_h
+
+    for ii in range(num_spin):
+        j_sub = cur_j[ii, ii]
+        h_sub = effective_h[ii, :]
+
+        term1 = np.exp(j_sub + h_sub)
+        term2 = np.exp(j_sub - h_sub)
+
+        j_sub_grad = cur_state[ii, :] ** 2 - (term1 + term2) / (term1 + term2 + 1)
+        h_eff_grad = cur_state[ii, :] - (term1 - term2) / (term1 + term2 + 1)
+
+        j_off_sub_grad = h_eff_grad * cur_state
+
+        cur_j_grad[ii, :] = np_mean(j_off_sub_grad, axis=1)
+        cur_j_grad[ii, ii] = np.mean(j_sub_grad)
+
+        cur_h_grad[ii] = np.mean(h_eff_grad)
+
+        cur_j_grad = (cur_j_grad + cur_j_grad.T) / 2
+
+    return - cur_j_grad, - cur_h_grad
+
+@numba.njit()
+def samp_moments(j_mat, h_vec, sample_size, mixing_time, samp_gap):
+    per_batch = int(1e5)
+    
+    num_spin = j_mat.shape[0]
+    rec_corr = np.zeros((num_spin, num_spin))
+    rec_mean = np.zeros(num_spin)
+    beta = 1
+    batch_count = 1
+    rec_sample = np.empty((num_spin, min(per_batch, int(sample_size))))
+    cur_spin = (np.random.randint(0, 3, (num_spin, 1)) - 1).astype(np.float64)
+    tot_sampling = int(mixing_time + sample_size * samp_gap - mixing_time % samp_gap)
+
+    rand_ind = np.random.randint(0, num_spin, tot_sampling)
+    rand_flip = np.random.randint(0, 2, tot_sampling)
+    rand_prob = np.random.rand(tot_sampling)
+
+    # for ii in numba.prange(tot_sampling):
+    for ii in range(tot_sampling):
+        cur_ind = rand_ind[ii]
+        j_sub = j_mat[cur_ind, :]
+        accept_prob = 0.0
+        new_spin = 0.0
+        diff_energy = 0.0
+
+        if cur_spin[cur_ind] == 0:
+            if rand_flip[ii] == 0:
+                new_spin = 1.0
+            else:
+                new_spin = -1.0
+            diff_energy = -j_mat[cur_ind, cur_ind] - new_spin * (j_sub.dot(cur_spin) + h_vec[cur_ind])
+            accept_prob = min(1.0, np.exp(- diff_energy * beta)[0])
+        else:
+            if rand_flip[ii] == 0:
+                accept_prob = 0;
+            else:
+                diff_energy = cur_spin[cur_ind] * (j_sub.dot(cur_spin) + h_vec[cur_ind])
+                accept_prob = min(1.0, np.exp(- diff_energy * beta)[0])
+
+        if rand_prob[ii] < accept_prob:
+            if cur_spin[cur_ind] == 0:
+                cur_spin[cur_ind] = new_spin
+            else:
+                cur_spin[cur_ind] = 0
+
+        if ii > mixing_time:
+            if (ii - mixing_time) % samp_gap == 0:
+                rec_sample[:, batch_count - 1] = cur_spin[:, 0].copy()
+                batch_count += 1
+
+                if batch_count == per_batch + 1:
+                    batch_count = 1
+                    rec_sample = np.ascontiguousarray(rec_sample)
+                    rec_corr += rec_sample.dot(rec_sample.T)
+                    rec_mean += np.sum(rec_sample, axis=1)
+
+    if batch_count != 1:
+        cur_sample = rec_sample[:, :batch_count - 1]
+        cur_sample = np.ascontiguousarray(cur_sample)
+        rec_corr += cur_sample.dot(cur_sample.T)
+        rec_mean += np.sum(cur_sample, axis=1)
+
+    corr_para = rec_corr / sample_size
+    mean_para = rec_mean / sample_size
+
+    return corr_para, mean_para
+
 from collections import deque
 
 def compute_gradient(cur_j, cur_h, raw_data, method, train_dat):
@@ -184,15 +303,21 @@ def compute_gradient(cur_j, cur_h, raw_data, method, train_dat):
     rec_jgrad = np.zeros((num_spin, num_spin, num_round))
     rec_hgrad = np.zeros((num_spin, num_round))
     
-    if method == 'pseudo_likelihood':
-        pass
-    elif method == 'maximum_likelihood':
-        for kk in range(num_round):
-            corr_para, mean_para = para_moments(cur_j, cur_h[:, kk])
-            rec_jgrad[:, :, kk] = corr_para - raw_data[kk][0]
-            rec_hgrad[:, kk] = mean_para - raw_data[kk][1].flatten()
-    elif method == 'mcmc_maximum_likelihood':
-        pass
+    for kk in range(num_round):
+
+        if method == 'pseudo_likelihood':
+            j_grad, h_grad = pseudol_gradient(cur_j, cur_h[:, kk].reshape(- 1, 1), raw_data[kk])
+            h_grad = h_grad.flatten()
+        else:
+            if method == 'maximum_likelihood':
+                corr_para, mean_para = para_moments(cur_j, cur_h[:, kk])            
+            elif method == 'mcmc_maximum_likelihood':
+                corr_para, mean_para = samp_moments(cur_j, cur_h, train_dat['mcmc_samplingsz'], train_dat['mcmc_samplingmix'], train_dat['mcmc_samplegap'])
+            j_grad = corr_para - raw_data[kk][0]
+            h_grad = mean_para - raw_data[kk][1].flatten()
+
+        rec_jgrad[:, :, kk] = j_grad
+        rec_hgrad[:, kk] = h_grad
 
     return rec_jgrad, rec_hgrad
 
