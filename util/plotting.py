@@ -190,34 +190,54 @@ def format_label(label):
 
     return '_'.join(parts)
 
-def spin_order(j_mat):
-    np.fill_diagonal(j_mat, 0)
-    
-    thres = 0
-    j_filt = j_mat.copy()
-    j_filt[np.abs(j_mat) < thres] = 0
-    np.fill_diagonal(j_filt, 0)
-    G = nx.from_numpy_array(j_filt)
-
-    G = ig.Graph.from_networkx(G)
-    G_pos = G.subgraph_edges(G.es.select(weight_gt = 0), delete_vertices=False);
-    G_neg = G.subgraph_edges(G.es.select(weight_lt = 0), delete_vertices=False);
-    G_neg.es['weight'] = [-w for w in G_neg.es['weight']]
-
-    part_pos = la.RBConfigurationVertexPartition(G_pos, weights='weight', resolution_parameter=2)
-    part_neg = la.RBConfigurationVertexPartition(G_neg, weights='weight', resolution_parameter=2)
-    optimiser = la.Optimiser()
-    diff = optimiser.optimise_partition_multiplex([part_pos, part_neg],layer_weights=[1,-1]);
-
-    net_class = list(part_pos)
-    spin_order = [spin for cur_list in net_class for spin in cur_list]
-    net_class_len = [len(cur_list) for cur_list in net_class]
-    return spin_order
 
 import matplotlib.patheffects as patheffects
 
-def plot_final(num_spin, gene_program_name, cur_j, spin_order,
+def plot_final(gene_program_name, cur_j,
                nodesz: float = 3, linewz: float = 1, node_color: str = 'k', pos=None):
+    
+    def spin_order_in_cluster(j_mat):
+        np.fill_diagonal(j_mat, 0)
+        
+        thres = 0
+        j_filt = j_mat.copy()
+        j_filt[np.abs(j_mat) < thres] = 0
+        np.fill_diagonal(j_filt, 0)
+        G = nx.from_numpy_array(j_filt)
+
+        G = ig.Graph.from_networkx(G)
+        G_pos = G.subgraph_edges(G.es.select(weight_gt = 0), delete_vertices=False);
+        G_neg = G.subgraph_edges(G.es.select(weight_lt = 0), delete_vertices=False);
+        G_neg.es['weight'] = [-w for w in G_neg.es['weight']]
+
+        part_pos = la.RBConfigurationVertexPartition(G_pos, weights='weight', resolution_parameter=2)
+        part_neg = la.RBConfigurationVertexPartition(G_neg, weights='weight', resolution_parameter=2)
+        optimiser = la.Optimiser()
+        diff = optimiser.optimise_partition_multiplex([part_pos, part_neg],layer_weights=[1,-1]);
+
+        net_class = list(part_pos)
+        spin_order = [spin for cur_list in net_class for spin in cur_list]
+        net_class_len = [len(cur_list) for cur_list in net_class]
+
+        start_angle = 0 * np.pi
+        end_angle = 2 * np.pi
+        gap_size = 2
+
+
+        angle_list_raw = np.linspace(start_angle, end_angle, np.sum(net_class_len) + gap_size * len(net_class_len) + 1)[: - 1]
+        angle_list = []
+        size_group_cum = np.cumsum(net_class_len)
+        size_group_cum = np.insert(size_group_cum, 0, 0)
+        # angle_list = np.linspace(start_angle, end_angle, len(leiden_list) + 1)
+        for ii in range(len(net_class_len)):
+            angle_list.extend(angle_list_raw[size_group_cum[ii] + gap_size * ii: size_group_cum[ii + 1] + gap_size * ii])
+            
+        pert_dist = 3
+
+        pert_pos = np.array([- pert_dist * np.cos(angle_list), pert_dist * np.sin(angle_list)]).T
+
+        return spin_order, pert_pos
+    
     def plot_network(G, j_mat, ax, nodesz=1, linewz=1, node_color='k', pos=None): 
     
         self_loops = [(u, v) for u, v in G.edges() if u == v]
@@ -253,7 +273,7 @@ def plot_final(num_spin, gene_program_name, cur_j, spin_order,
     def adjust_label_position(pos, offset=0.1):
         """Move labels radially outward from the center by a given offset."""
         adjusted_pos = {}
-        for node, coordinates in pos.items():
+        for node, coordinates in enumerate(pos):
             theta = np.arctan2(coordinates[1], coordinates[0])
             radius = np.sqrt(coordinates[0]**2 + coordinates[1]**2)
             adjusted_pos[node] = (coordinates[0] + np.cos(theta)*offset, coordinates[1] + np.sin(theta)*offset)
@@ -261,19 +281,24 @@ def plot_final(num_spin, gene_program_name, cur_j, spin_order,
 
     sc.set_figure_params(figsize=[40, 40])
 
+    spin_order, pert_pos = spin_order_in_cluster(cur_j)
+
+    num_spin = cur_j.shape[0]
+
+    fig, grid = sc.pl._tools._panel_grid(0.2, 0.2, ncols=2, num_panels=2)
+
+    cur_j_filt = cur_j.copy()
+    cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), 40)] = 0
+
+    G = nx.from_numpy_matrix(cur_j_filt[spin_order, :][:, spin_order])
+
+    pos = pert_pos
     node_color = ['#f0dab1'] * num_spin
     node_label = np.array(gene_program_name)[spin_order]
     # node_label = np.array([format_label(label) for label in gene_list])
 
     nodesz = np.sqrt(100 / num_spin)
     linewz = np.sqrt(100 / num_spin)
-
-    fig, grid = sc.pl._tools._panel_grid(0.2, 0.2, ncols=2, num_panels=2)
-
-    cur_j_filt = cur_j.copy()
-    cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), 40)] = 0
-    G = nx.from_numpy_matrix(cur_j_filt[spin_order, :][:, spin_order])
-    pos = nx.circular_layout(G, scale = 5)
 
     ax = plt.subplot(grid[1])
     ax = plot_network(G, cur_j_filt, ax, nodesz=nodesz, linewz=linewz, node_color=node_color, pos=pos)
@@ -334,3 +359,20 @@ def gene_program_decomposition(onmf_summary,
 
     plt.savefig(fig_folder + 'gene_program_decomposition.png', bbox_inches='tight')
 
+def node_cluster():
+    start_angle = 0 * np.pi
+    end_angle = 2 * np.pi
+    gap_size = 2
+
+
+    angle_list_raw = np.linspace(start_angle, end_angle, np.sum(net_class_len) + gap_size * len(net_class_len) + 1)[: - 1]
+    angle_list = []
+    size_group_cum = np.cumsum(net_class_len)
+    size_group_cum = np.insert(size_group_cum, 0, 0)
+    # angle_list = np.linspace(start_angle, end_angle, len(leiden_list) + 1)
+    for ii in range(len(net_class_len)):
+        angle_list.extend(angle_list_raw[size_group_cum[ii] + gap_size * ii: size_group_cum[ii + 1] + gap_size * ii])
+        
+    pert_dist = 3
+
+    pert_pos = np.array([- pert_dist * np.cos(angle_list), pert_dist * np.sin(angle_list)]).T
