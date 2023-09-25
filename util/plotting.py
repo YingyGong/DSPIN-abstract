@@ -127,7 +127,15 @@ def gene_program_on_umap(onmf_rep, umap_all, program_umap_pos, fig_folder=None, 
 
     return(fig_folder + 'gene_program_on_umap.png')
 
-def plot_j_network(j_mat, pos=None, label=None, thres=None, seed=0):
+# this one is the network with irregular shape
+def plot_j_network(j_mat, 
+                   pos=None, 
+                   label=None, 
+                   thres=None, 
+                   seed=0,
+                   node_size: float = 0.2,
+                   label_dist: float = 0.01,
+                   line_width: float = 10):
     
     if thres is not None:
         j_filt = j_mat.copy()
@@ -136,10 +144,6 @@ def plot_j_network(j_mat, pos=None, label=None, thres=None, seed=0):
         j_mat = j_filt
         
     ax = plt.gca()
-    
-    nodesz = 0.2
-    labeldist = 0.01
-    linewz = 10
 
     G = nx.from_numpy_array(j_mat)
 
@@ -154,25 +158,37 @@ def plot_j_network(j_mat, pos=None, label=None, thres=None, seed=0):
         # pos = nx.spectral_layout(G)
 
     col1 = '#f0dab1'
-    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=61.8 * nodesz, node_color=col1, edgecolors=None)
+    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=61.8 * node_size, node_color=col1, edgecolors=None)
     if label is not None:
         nx.draw_networkx_labels(G, pos, labels=label, font_size=20)
     
     sig_fun = lambda xx : (1 / (1 + np.exp(- 5 * (xx + cc))))
     cc = - np.max(np.abs(j_mat)) / 4
-    nx.draw_networkx_edges(G, pos, ax=ax, edgelist=eposi, width=linewz * wposi, 
+    nx.draw_networkx_edges(G, pos, ax=ax, edgelist=eposi, width=line_width * wposi, 
                            edge_color='#9999ff', alpha=sig_fun(wposi))
 
-    nx.draw_networkx_edges(G, pos, ax=ax, edgelist=enega, width=- linewz * wnega, 
+    nx.draw_networkx_edges(G, pos, ax=ax, edgelist=enega, width=-line_width * wnega, 
                            edge_color='#ff9999', alpha=sig_fun(- wnega))
     ax.set_axis_off()
         
-    return pos
+    return 
 
-def temporary_spin_name(csv_file): 
+
+
+def temporary_spin_name(csv_file, num_gene: int = 4): 
     df = pd.read_csv(csv_file, header=None)
-    spin_names = [ 'P' + '_'.join(df[col][:6]) for col in df.columns]
+    spin_names = ['P' + '_'.join(map(str, df[col][:6])) for col in df.columns]
     return spin_names
+
+def format_label(label):
+    parts = label.split('_')
+    i = 0
+    while i < len(parts) - 1:
+        if i % 2 == 1:
+            parts[i] = parts[i] + '\n'
+        i += 1
+
+    return '_'.join(parts)
 
 def spin_order(j_mat):
     np.fill_diagonal(j_mat, 0)
@@ -197,6 +213,79 @@ def spin_order(j_mat):
     spin_order = [spin for cur_list in net_class for spin in cur_list]
     net_class_len = [len(cur_list) for cur_list in net_class]
     return spin_order
+
+import matplotlib.patheffects as patheffects
+
+def plot_final(num_spin, gene_program_name, cur_j, spin_order,
+               nodesz: float = 3, linewz: float = 1, node_color: str = 'k', pos=None):
+    def plot_network(G, j_mat, ax, nodesz=1, linewz=1, node_color='k', pos=None): 
+    
+        self_loops = [(u, v) for u, v in G.edges() if u == v]
+        G.remove_edges_from(self_loops)
+
+        eposi= [(u, v) for (u,v,d) in G.edges(data=True) if d['weight'] > 0]
+        wposi= np.array([d['weight'] for (u,v,d) in G.edges(data=True) if d['weight'] > 0])
+
+        enega = [(u,v) for (u,v,d) in G.edges(data=True) if d['weight'] < 0]
+        wnega = np.array([d['weight'] for (u,v,d) in G.edges(data=True) if d['weight'] < 0])
+
+        col1 = '#f0dab1'
+        
+        nx.draw_networkx_nodes(G, pos, ax=ax, node_size=61.8 * nodesz, node_color=node_color, edgecolors='k')
+
+        sig_fun = lambda xx : (1 / (1 + np.exp(- 5 * (xx + cc))))
+        cc = np.max(np.abs(j_mat)) / 10
+
+        # edges
+        nx.draw_networkx_edges(G, pos, ax=ax, edgelist=eposi, width=linewz * wposi, 
+                                edge_color='#3285CC', alpha=sig_fun(wposi))
+
+        nx.draw_networkx_edges(G, pos, ax=ax, edgelist=enega, width=- linewz * wnega, 
+                                edge_color='#E84B23', alpha=sig_fun(- wnega))
+
+        margin = 0.2
+        plt.margins(x=0.1, y=0.1)
+
+        ax.set_axis_off()
+        ax.set_aspect('equal')
+        return ax 
+    
+    def adjust_label_position(pos, offset=0.1):
+        """Move labels radially outward from the center by a given offset."""
+        adjusted_pos = {}
+        for node, coordinates in pos.items():
+            theta = np.arctan2(coordinates[1], coordinates[0])
+            radius = np.sqrt(coordinates[0]**2 + coordinates[1]**2)
+            adjusted_pos[node] = (coordinates[0] + np.cos(theta)*offset, coordinates[1] + np.sin(theta)*offset)
+        return adjusted_pos
+
+    sc.set_figure_params(figsize=[40, 40])
+
+    node_color = ['#f0dab1'] * num_spin
+    node_label = np.array(gene_program_name)[spin_order]
+    # node_label = np.array([format_label(label) for label in gene_list])
+
+    nodesz = np.sqrt(100 / num_spin)
+    linewz = np.sqrt(100 / num_spin)
+
+    fig, grid = sc.pl._tools._panel_grid(0.2, 0.2, ncols=2, num_panels=2)
+
+    cur_j_filt = cur_j.copy()
+    cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), 40)] = 0
+    G = nx.from_numpy_matrix(cur_j_filt[spin_order, :][:, spin_order])
+    pos = nx.circular_layout(G, scale = 5)
+
+    ax = plt.subplot(grid[1])
+    ax = plot_network(G, cur_j_filt, ax, nodesz=nodesz, linewz=linewz, node_color=node_color, pos=pos)
+
+    path_effect = [patheffects.withStroke(linewidth=3, foreground='w')]
+
+    adjusted_positions = adjust_label_position(pos, 0.5)
+    for ii in range(num_spin):
+        x, y = adjusted_positions[ii]
+        text = plt.text(x, y, node_label[ii], fontsize=1000/num_spin, color='k', ha='center', va='center', rotation=np.arctan(pos[ii][1] / pos[ii][0]) / np.pi * 180)
+        text.set_path_effects(path_effect)
+    ax.set_title('Gene Regulatory Network under Cancerous Conditions')
 
 from sklearn.cluster import KMeans
 
