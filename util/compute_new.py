@@ -15,25 +15,56 @@ from tqdm import tqdm
 
 
 def category_balance_number(total_sample_size, cluster_count, method, maximum_sample_rate):
+    '''
+    Calculate the sampling number for each category based on the given method.
+    
+    Parameters:
+    total_sample_size (int): The total size of the samples.
+    cluster_count (List[int]): A list containing the count of elements in each cluster.
+    method (str): The method used for balancing the categories; can be 'equal', 'proportional', or 'squareroot'.
+    maximum_sample_rate (float): The maximum rate of the samples.
+    
+    Returns:
+    np.array: An array containing the number of samples from each category based on the given method.
+    '''
+
+    # Validate the method parameter
     if method not in ['equal', 'proportional', 'squareroot']:
         raise ValueError('method must be one of equal, proportional, squareroot')
     
+    # Calculate sampling_number based on the given method
     if method == 'squareroot':
+        # For squareroot method, calculate based on the square root of the cluster count
         esti_size = (np.sqrt(cluster_count) / np.sum(np.sqrt(cluster_count)) * total_sample_size).astype(int)
         weight_fun = np.min([esti_size, maximum_sample_rate * np.array(cluster_count)], axis=0)
     elif method == 'equal':
+        # For equal method, divide total_sample_size by the number of clusters
         esti_size = total_sample_size / len(cluster_count)
-        weight_fun = np.min([esti_size * np.ones(len(cluster_count)), maximum_sample_rate * np.array(cluster_count)], axis=0)
+        weight_fun = np.min([esti_size * np.ones(len(cluster_count)), 
+                             maximum_sample_rate * np.array(cluster_count)], axis=0)
     else:
+        # For proportional method, use cluster_count as weight_fun directly
         weight_fun = cluster_count
-
+    
+    # Calculate the final sampling number for each category
     sampling_number = (weight_fun / np.sum(weight_fun) * total_sample_size).astype(int)
     return sampling_number
 
 from sklearn.preprocessing import normalize
 
 def summary_components(all_components, num_spin, summary_method='kmeans'):
+    '''
+    Summarize components using KMeans clustering algorithm.
     
+    Parameters:
+    all_components (np.array): A 2D array where each row represents a sample, and each column represents a feature.
+    num_spin (int): The number of clusters.
+    summary_method (str, optional): The method used for summarizing the components. Defaults to 'kmeans'.
+    
+    Returns:
+    List[np.array]: A list of numpy arrays, each containing the indices of the genes that belong to a specific group or cluster.
+    '''
+
     num_gene = all_components.shape[1]
 
     if summary_method == 'kmeans':
