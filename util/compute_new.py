@@ -125,16 +125,16 @@ def summary_components(all_components: np.array,
 def onmf(X: np.array, rank: int, max_iter: int = 100) -> (np.array, np.array):
     """
     Orthogonal Non-Negative Matrix Factorization (ONMF) for a given rank.
-    
+
     Parameters:
     X (np.array): Input Data Matrix.
     rank (int): Desired Rank for Factorization.
     max_iter (int, optional): Maximum Number of Iterations. Defaults to 100.
-    
+
     Returns:
     np.array, np.array: Factorized Matrices S.T and A.
     """
-    
+
     m, n = X.shape
 
     # Initialize matrices A and S
@@ -150,70 +150,74 @@ def onmf(X: np.array, rank: int, max_iter: int = 100) -> (np.array, np.array):
 
         pbar.update(1)
 
-        # Calculate the reconstruction error every 10 iterations and update the progress bar
+        # Calculate the reconstruction error every 10 iterations and update the
+        # progress bar
         if itr % 10 == 0:
             error = np.linalg.norm(X - np.dot(A, S), 'fro')
             pbar.set_postfix({"Reconstruction Error": f"{error:.2f}"})
 
     pbar.close()
-    
+
     # Normalize the components
     norm_fac = np.sqrt(np.diag(S.dot(S.T)))
     S /= norm_fac.reshape(-1, 1)
     A *= norm_fac.reshape(1, -1)
     A *= np.sum(X * A.dot(S)) / np.sum((A.dot(S)) ** 2)
-    
+
     return S.T, A
 
 
 def compute_onmf(seed: int, num_spin: int, gene_matrix_bin: np.array) -> NMF:
     """
     Computes the ONMF model for the given gene matrix.
-    
+
     Parameters:
     seed (int): Seed for Random Number Generation.
     num_spin (int): The number of desired components (clusters/spins).
     gene_matrix_bin (np.array): Binary Matrix representing the gene expression data.
-    
+
     Returns:
     NMF: The NMF model with computed components.
     """
-    
+
     # Generate a random seed
     np.random.seed(seed)
     # Factorized Matrices
     H, W = onmf(gene_matrix_bin, num_spin)
-    
+
     # Initialize the NMF model
     nmf_model = NMF(n_components=num_spin, random_state=seed)
 
     # Set the components and number of components
     nmf_model.components_ = np.array(H).T
     nmf_model.n_components_ = num_spin
-    
+
     return nmf_model
 
 
 def onmf_discretize(onmf_rep_ori: np.array, fig_folder: str) -> np.array:
     """
     Discretize the representation obtained from ONMF using KMeans clustering and visualize the sorted representations.
-    
+
     Parameters:
     onmf_rep_ori (np.array): Original ONMF representation.
     fig_folder (str): Folder to save the figure.
-    
+
     Returns:
     np.array: Discretized ONMF representation.
     """
-    
+
     num_spin = onmf_rep_ori.shape[1]
     sc.set_figure_params(figsize=[2, 2])
-    _, grid = sc.pl._tools._panel_grid(0.3, 0.3, ncols=7, num_panels=min(21, num_spin))
+    _, grid = sc.pl._tools._panel_grid(
+        0.3, 0.3, ncols=7, num_panels=min(
+            21, num_spin))
 
     onmf_rep_tri = np.zeros(onmf_rep_ori.shape)
     for ii in range(num_spin):
         # Perform KMeans clustering for each spin/component
-        km_fit = KMeans(n_clusters=3, n_init=10).fit(onmf_rep_ori[:, ii].reshape(-1, 1))
+        km_fit = KMeans(n_clusters=3, n_init=10).fit(
+            onmf_rep_ori[:, ii].reshape(-1, 1))
         onmf_rep_tri[:, ii] = (km_fit.labels_ == np.argsort(km_fit.cluster_centers_.reshape(-1))[0]) * \
             (-1) + (km_fit.labels_ == np.argsort(km_fit.cluster_centers_.reshape(-1))[2]) * 1
 
@@ -221,7 +225,8 @@ def onmf_discretize(onmf_rep_ori: np.array, fig_folder: str) -> np.array:
         if ii < 21:
             ax = plt.subplot(grid[ii])
             plt.plot(np.sort(onmf_rep_ori[:, ii]))
-            plt.plot(np.sort(km_fit.cluster_centers_[km_fit.labels_].reshape(-1)))
+            plt.plot(np.sort(km_fit.cluster_centers_[
+                     km_fit.labels_].reshape(-1)))
 
     # Save the visual representation
     if fig_folder:
@@ -234,48 +239,51 @@ def onmf_discretize(onmf_rep_ori: np.array, fig_folder: str) -> np.array:
 def corr(data: np.array) -> np.array:
     """
     Calculates the correlation of the given data.
-    
+
     Parameters:
     data (np.array): Input Data Matrix.
-    
+
     Returns:
     np.array: Correlation Matrix of the given data.
     """
-    
-    # Transposing and dot multiplying the matrix, and normalizing by the number of samples.
+
+    # Transposing and dot multiplying the matrix, and normalizing by the
+    # number of samples.
     return data.T.dot(data) / data.shape[0]
 
 
 def corr_mean(cur_data: np.array) -> np.array:
     """
     Calculates the correlation and mean of the given data.
-    
+
     Parameters:
     cur_data (np.array): Input Data Matrix.
-    
+
     Returns:
     np.array: Array containing the correlation matrix and mean of the data.
     """
-    
+
     rec_data = np.zeros(2, dtype=object)
     rec_data[0] = corr(cur_data)  # Storing correlation matrix
     rec_data[1] = np.mean(cur_data, axis=0).reshape(-1, 1)  # Storing mean
-    
+
     return rec_data
 
 
-def sample_corr_mean(samp_full: np.array, comp_bin: np.array) -> (np.array, np.array):
+def sample_corr_mean(samp_full: np.array,
+                     comp_bin: np.array) -> (np.array,
+                                             np.array):
     """
     Calculates the correlation mean for each unique sample in samp_full.
-    
+
     Parameters:
     samp_full (np.array): Array of samples.
     comp_bin (np.array): Binary matrix representation of the samples.
-    
+
     Returns:
     np.array, np.array: Array of correlation mean for each unique sample, and the array of unique samples.
     """
-    
+
     samp_list = np.unique(samp_full)
     raw_corr_data = np.zeros(len(samp_list), dtype=object)
 
@@ -283,36 +291,42 @@ def sample_corr_mean(samp_full: np.array, comp_bin: np.array) -> (np.array, np.a
     for ind, samp in enumerate(samp_list):
         filt_ind = samp_full == samp
         raw_corr_data[ind] = corr_mean(comp_bin[filt_ind, :])
-    
+
     return raw_corr_data, samp_list
 
 
 def para_moments(j_mat: np.array, h_vec: np.array) -> (np.array, np.array):
     """
     Calculates the mean and correlation given j network and h vectors.
-    
+
     Parameters:
     j_mat (np.array): Interaction Matrix.
     h_vec (np.array): External Field Vector.
-    
+
     Returns:
     np.array, np.array: Correlation and mean parameters.
     """
-    
+
     num_spin = j_mat.shape[0]
     num_sample = 3 ** num_spin
     sample_indices = np.indices((3,) * num_spin)
     ordered_sample = (sample_indices - 1).reshape(num_spin, num_sample)
 
-    j_mat = j_mat + np.diag(np.diag(j_mat))  # Adding diagonal elements to themselves for calculation
-    ordered_energy = - (h_vec.T @ ordered_sample + np.sum((j_mat @ ordered_sample) * ordered_sample, axis=0) / 2)
+    # Adding diagonal elements to themselves for calculation
+    j_mat = j_mat + np.diag(np.diag(j_mat))
+    ordered_energy = - (h_vec.T @ ordered_sample + \
+                        np.sum((j_mat @ ordered_sample) * ordered_sample, axis=0) / 2)
     ordered_exp = np.exp(-ordered_energy)
     partition = np.sum(ordered_exp)
     freq = ordered_exp / partition  # Calculating the frequency
     mean_para = np.sum(ordered_sample * freq.reshape(1, -1), axis=1)
-    
-    corr_para = np.einsum('i,ji,ki->jk', freq.flatten(), ordered_sample, ordered_sample)
-    
+
+    corr_para = np.einsum(
+        'i,ji,ki->jk',
+        freq.flatten(),
+        ordered_sample,
+        ordered_sample)
+
     return corr_para, mean_para
 
 
@@ -320,23 +334,23 @@ def para_moments(j_mat: np.array, h_vec: np.array) -> (np.array, np.array):
 def np_apply_along_axis(func1d, axis, arr):
     """
     Applies a function along the specified axis.
-    
+
     Parameters:
     func1d: 1-D Function to be applied.
     axis (int): Axis along which function should be applied.
     arr (np.array): Input Array.
-    
+
     Returns:
     np.array: The result of applying func1d to arr along the specified axis.
     """
-    
+
     assert arr.ndim == 2
     assert axis in [0, 1]
     result = np.empty(arr.shape[1]) if axis == 0 else np.empty(arr.shape[0])
-    
+
     for i in range(len(result)):
         result[i] = func1d(arr[:, i]) if axis == 0 else func1d(arr[i, :])
-        
+
     return result
 
 
@@ -344,13 +358,12 @@ def np_apply_along_axis(func1d, axis, arr):
 def np_mean(array: np.array, axis: int) -> np.array:
     """
     Computes the arithmetic mean along the specified axis.
-    
+
     Parameters:
     array (np.array): Input array.
     axis (int): Axis along which the mean is computed. 1 is for row-wise, 0 is for column-wise.
     """
     return np_apply_along_axis(np.mean, axis, array)
-
 
 
 @numba.jit()
@@ -434,7 +447,8 @@ def samp_moments(j_mat, h_vec, sample_size, mixing_time, samp_gap):
     # Monte Carlo Sampling
     for ii in range(tot_sampling):
         cur_ind = rand_ind[ii]
-        # Perform flips and accepts/rejects new states according to Metropolis rule
+        # Perform flips and accepts/rejects new states according to Metropolis
+        # rule
         j_sub = j_mat[cur_ind, :]
         # Compute acceptance probability and execute possible spin flips
         # ... [The rest of the logic goes here as in the original implementation]
@@ -488,7 +502,8 @@ def compute_gradient(cur_j, cur_h, raw_data, method, train_dat):
                 cur_j, cur_h[:, kk].reshape(- 1, 1), raw_data[kk])
             h_grad = h_grad.flatten()
         else:
-            # Distinguishing between other methods and computing gradients accordingly
+            # Distinguishing between other methods and computing gradients
+            # accordingly
             if method == 'maximum_likelihood':
                 corr_para, mean_para = para_moments(cur_j, cur_h[:, kk])
             elif method == 'mcmc_maximum_likelihood':
@@ -549,7 +564,7 @@ def update_adam(
         epsilon=1e-8):
     """
     Adam optimizer update rule.
-    
+
     Parameters:
     gradient (numpy.ndarray): The gradient of the objective function.
     m (numpy.ndarray): 1st moment vector (moving average of the gradients).
@@ -566,14 +581,15 @@ def update_adam(
     # Update biased first moment estimate and biased second raw moment estimate
     m = beta1 * m + (1 - beta1) * gradient
     v = beta2 * v + (1 - beta2) * (gradient ** 2)
-    
-    # Compute bias-corrected first moment estimate and bias-corrected second raw moment estimate
+
+    # Compute bias-corrected first moment estimate and bias-corrected second
+    # raw moment estimate
     m_hat = m / (1 - beta1 ** counter)
     v_hat = v / (1 - beta2 ** counter)
-    
+
     # Compute the update rule for parameters
     update = stepsz * m_hat / (np.sqrt(v_hat) + epsilon)
-    
+
     return update, m, v
 
 
@@ -591,43 +607,55 @@ def learn_network_adam(raw_data, method, train_dat):
     """
     # Retrieve training parameters and data
     num_spin, num_round = train_dat['cur_h'].shape
-    num_epoch, stepsz, rec_gap = (train_dat.get(key, None) for key in ["num_epoch", "stepsz", "rec_gap"])
+    num_epoch, stepsz, rec_gap = (
+        train_dat.get(
+            key, None) for key in [
+            "num_epoch", "stepsz", "rec_gap"])
     list_step = np.arange(num_epoch, 0, - rec_gap)[::-1]
     cur_j, cur_h = (train_dat.get(key, None) for key in ["cur_j", "cur_h"])
     save_path = train_dat.get('save_path', None)
-    backtrack_gap, backtrack_tol = (train_dat.get(key, None) for key in ["backtrack_gap", "backtrack_tol"])
-    
-    # Initialize variables to store parameters, gradients, and other values during training
+    backtrack_gap, backtrack_tol = (
+        train_dat.get(
+            key, None) for key in [
+            "backtrack_gap", "backtrack_tol"])
+
+    # Initialize variables to store parameters, gradients, and other values
+    # during training
     rec_jmat_all = np.zeros((num_epoch, num_spin, num_spin))
     rec_hvec_all = np.zeros((num_epoch, num_spin, num_round))
     rec_jgrad_sum_norm = np.inf * np.ones(num_epoch)
     mjj, vjj = np.zeros(cur_j.shape), np.zeros(cur_j.shape)
     mhh, vhh = np.zeros(cur_h.shape), np.zeros(cur_h.shape)
-    log_adam_grad = {name: deque(maxlen=backtrack_gap) for name in ["mjj", "vjj", "mhh", "vhh"]}
+    log_adam_grad = {name: deque(maxlen=backtrack_gap)
+                     for name in ["mjj", "vjj", "mhh", "vhh"]}
     backtrack_counter = 0
     counter = 1
-    
+
     while counter <= num_epoch:
         # Compute gradient and apply regularization
-        rec_jgrad, rec_hgrad = compute_gradient(cur_j, cur_h, raw_data, method, train_dat)
-        rec_jgrad, rec_hgrad = apply_regularization(rec_jgrad, rec_hgrad, cur_j, cur_h, train_dat)
-        
+        rec_jgrad, rec_hgrad = compute_gradient(
+            cur_j, cur_h, raw_data, method, train_dat)
+        rec_jgrad, rec_hgrad = apply_regularization(
+            rec_jgrad, rec_hgrad, cur_j, cur_h, train_dat)
+
         # Update parameters using Adam optimizer
         rec_jgrad_sum = np.sum(rec_jgrad, axis=2)
-        update, mjj, vjj = update_adam(rec_jgrad_sum, mjj, vjj, counter, stepsz)
+        update, mjj, vjj = update_adam(
+            rec_jgrad_sum, mjj, vjj, counter, stepsz)
         cur_j -= update
         update, mhh, vhh = update_adam(rec_hgrad, mhh, vhh, counter, stepsz)
         cur_h -= update
-        
+
         # Store updated parameters and gradients for later analysis or use
         rec_jmat_all[counter - 1, :, :] = cur_j
         rec_hvec_all[counter - 1, :, :] = cur_h
         rec_jgrad_sum_norm[counter - 1] = np.linalg.norm(rec_jgrad_sum)
-        
+
         # Log Adam gradients for backtracking
-        for name, value in zip(["mjj", "vjj", "mhh", "vhh"], [mjj, vjj, mhh, vhh]):
+        for name, value in zip(["mjj", "vjj", "mhh", "vhh"], [
+                               mjj, vjj, mhh, vhh]):
             log_adam_grad[name].append(value)
-        
+
         # Save training log and print progress
         if counter in list_step:
             sio.savemat(save_path + 'train_log.mat',
@@ -635,26 +663,30 @@ def learn_network_adam(raw_data, method, train_dat):
                          'rec_hvec_all': rec_hvec_all,
                          'rec_jmat_all': rec_jmat_all,
                          'rec_jgrad_sum_norm': rec_jgrad_sum_norm})
-            print('Progress: %d, Network gradient: %f' % (np.round(100 * counter / num_epoch, 2), rec_jgrad_sum_norm[counter - 1]))
-        
-        # Handle backtracking 
-        if counter > backtrack_gap and rec_jgrad_sum_norm[counter - 1] > 2 * rec_jgrad_sum_norm[counter - 1 - backtrack_gap]:
+            print('Progress: %d, Network gradient: %f' % (
+                np.round(100 * counter / num_epoch, 2), rec_jgrad_sum_norm[counter - 1]))
+
+        # Handle backtracking
+        if counter > backtrack_gap and rec_jgrad_sum_norm[counter - \
+            1] > 2 * rec_jgrad_sum_norm[counter - 1 - backtrack_gap]:
             print('Backtracking at epoch %d' % counter)
             backtrack_counter += 1
-            mjj, vjj, mhh, vhh = [log_adam_grad[key][0] for key in ['mjj', 'vjj', 'mhh', 'vhh']]
+            mjj, vjj, mhh, vhh = [log_adam_grad[key][0]
+                                  for key in ['mjj', 'vjj', 'mhh', 'vhh']]
             counter = counter - backtrack_gap
             stepsz = stepsz / 4
             if backtrack_counter > backtrack_tol:
-                print('Backtracking more than %d times, stop training.' % backtrack_tol)
+                print(
+                    'Backtracking more than %d times, stop training.' %
+                    backtrack_tol)
                 break
         else:
             counter += 1
-    
-    # Retrieve parameters corresponding to the minimum gradient norm found during training
+
+    # Retrieve parameters corresponding to the minimum gradient norm found
+    # during training
     pos = np.argmin(rec_jgrad_sum_norm)
     cur_h = rec_hvec_all[pos, :, :]
     cur_j = rec_jmat_all[pos, :, :]
-    
+
     return cur_j, cur_h
-
-
