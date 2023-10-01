@@ -14,6 +14,10 @@ import seaborn as sns
 import os
 import sys
 import csv
+import scanpy as sc
+import igraph as ig
+import leidenalg as la
+import networkx as nx
 
 
 def onmf_to_csv(features, gene_name, file_path, thres=0.01):
@@ -182,6 +186,17 @@ def plot_final(
         linewz: float = 1,
         node_color: str = 'k',
         pos=None):
+    """
+    Plot the final gene regulatory network.
+
+    Args:
+    - gene_program_name: The names of gene programs.
+    - cur_j: The adjacency matrix representing connections between gene programs.
+    - nodesz: The size of nodes in the network.
+    - linewz: The width of edges in the network.
+    - node_color: The color of nodes in the network.
+    - pos: The positions of nodes in the network.
+    """
 
     def spin_order_in_cluster(j_mat):
         """ Determine the order of spins in the cluster.
@@ -253,6 +268,18 @@ def plot_final(
             linewz=1,
             node_color='k',
             pos=None):
+        """ 
+        Plot the network.
+
+        Args:
+        - G: The networkx graph object.
+        - j_mat: The adjacency matrix representing connections between spins.
+        - ax: The axis object to plot the network.
+        - nodesz: The size of nodes in the network.
+        - linewz: The width of edges in the network.
+        - node_color: The color of nodes in the network.
+        - pos: The positions of nodes in the network.
+        """
 
         self_loops = [(u, v) for u, v in G.edges() if u == v]
         G.remove_edges_from(self_loops)
@@ -305,7 +332,8 @@ def plot_final(
         return ax
 
     def adjust_label_position(pos, offset=0.1):
-        """ Adjust the label positions radially outward from the center.
+        """ 
+        Adjust the label positions radially outward from the center.
 
         Args:
         - pos: The original positions of the labels.
@@ -383,6 +411,7 @@ def plot_final(
 
 
 def node_cluster():
+    # I am unsure whether this function is called, so left it here for now.
     start_angle = 0 * np.pi
     end_angle = 2 * np.pi
     gap_size = 2

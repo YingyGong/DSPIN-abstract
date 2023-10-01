@@ -451,7 +451,6 @@ def samp_moments(j_mat, h_vec, sample_size, mixing_time, samp_gap):
         # rule
         j_sub = j_mat[cur_ind, :]
         # Compute acceptance probability and execute possible spin flips
-        # ... [The rest of the logic goes here as in the original implementation]
         # Collecting samples
         if ii > mixing_time and (ii - mixing_time) % samp_gap == 0:
             rec_sample[:, batch_count - 1] = cur_spin[:, 0].copy()
