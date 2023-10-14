@@ -138,25 +138,6 @@ def gene_program_decomposition(onmf_summary,
         'gene_program_decomposition.png',
         bbox_inches='tight')
 
-
-def temporary_spin_name(csv_file, num_gene: int = 4):
-    """
-    Create temporary spin names based on the CSV file content.
-
-    Parameters:
-    csv_file (str): Path to the CSV file containing the data.
-    num_gene (int): Number of genes to be considered for creating the name.
-
-    Returns:
-    List[str]: A list containing the generated temporary spin names.
-    """
-    df = pd.read_csv(csv_file, header=None)
-    # Create spin names by joining the first 6 elements (or less if not
-    # available) of each column in the dataframe
-    spin_names = ['P' + '_'.join(map(str, df[col][:6])) for col in df.columns]
-    return spin_names
-
-
 def format_label(label):
     """
     Format the label string by inserting a newline character after every second word.
@@ -177,6 +158,24 @@ def format_label(label):
         i += 1
 
     return '_'.join(parts)
+
+def temporary_spin_name(csv_file, num_gene: int = 4):
+    """
+    Create temporary spin names based on the CSV file content.
+
+    Parameters:
+    csv_file (str): Path to the CSV file containing the data.
+    num_gene (int): Number of genes to be considered for creating the name.
+
+    Returns:
+    List[str]: A list containing the generated temporary spin names.
+    """
+    df = pd.read_csv(csv_file, header=None)
+    # Create spin names by joining the first 6 elements (or less if not
+    # available) of each column in the dataframe
+    spin_names = ['P' + '_'.join(map(str, df[col][:6])) for col in df.columns]
+    spin_names_formatted = [format_label(name) for name in spin_names]
+    return spin_names_formatted
 
 
 def plot_final(
@@ -407,26 +406,4 @@ def plot_final(
             np.pi *
             180)
         text.set_path_effects(path_effect)
-    ax.set_title('Gene Regulatory Network under Cancerous Conditions')
-
-
-def node_cluster():
-    # I am unsure whether this function is called, so left it here for now.
-    start_angle = 0 * np.pi
-    end_angle = 2 * np.pi
-    gap_size = 2
-
-    angle_list_raw = np.linspace(start_angle, end_angle, np.sum(
-        net_class_len) + gap_size * len(net_class_len) + 1)[: - 1]
-    angle_list = []
-    size_group_cum = np.cumsum(net_class_len)
-    size_group_cum = np.insert(size_group_cum, 0, 0)
-    # angle_list = np.linspace(start_angle, end_angle, len(leiden_list) + 1)
-    for ii in range(len(net_class_len)):
-        angle_list.extend(
-            angle_list_raw[size_group_cum[ii] + gap_size * ii: size_group_cum[ii + 1] + gap_size * ii])
-
-    pert_dist = 3
-
-    pert_pos = np.array([- pert_dist * np.cos(angle_list),
-                        pert_dist * np.sin(angle_list)]).T
+    ax.set_title('Gene Regulatory Network')

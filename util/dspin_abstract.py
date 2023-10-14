@@ -498,6 +498,8 @@ class ProgramDSPIN(AbstractDSPIN):
                     num_onmf_components,
                     ii),
                 allow_pickle=True).item()
+            print("rec_components shape: ", rec_components.shape)
+            print("cur_onmf shape: ", cur_onmf.components_.shape)
             rec_components[ii] = cur_onmf.components_
 
         all_components = rec_components.reshape(-1,
@@ -695,62 +697,3 @@ class DSPIN(object):
         # otherwise, use ProgramDSPIN because ONMF is needed
         else:
             return ProgramDSPIN(adata, save_path, num_spin=num_spin, **kwargs)
-
-
-if __name__ == "__main__":
-
-    data_folder = 'data/thomsonlab_signaling/'
-    large_data_folder = 'large_data/thomsonlab_signaling/'
-
-    # cadata = ad.read_h5ad(
-    #     large_data_folder +
-    #     'thomsonlab_signaling_filtered_2500_scvi_umap.h5ad')
-
-    # random_select = np.random.choice(cadata.shape[0], 10000, replace=False)
-    # gene_select = np.random.choice(cadata.shape[1], 500, replace=False)
-    # cadata = cadata[random_select, :][:, gene_select].copy()
-    # cadata.write(
-    #     large_data_folder +
-    #     'thomsonlab_signaling_filtered_2500_scvi_umap_small.h5ad')
-
-    cadata = ad.read_h5ad(
-        large_data_folder +
-        'thomsonlab_signaling_filtered_2500_scvi_umap_small.h5ad')
-
-    save_path = "test/test_signalling_0913/"
-
-    samp_list = np.unique(cadata.obs['sample_id'])
-    subset_list = samp_list[: 3]
-
-    num_spin = 30
-    # num_spin = 30
-    # num_spin = 20
-    model = DSPIN(cadata, save_path, num_spin=num_spin)
-
-    # prior_programs = ['CD3D PTPRCAP IL7R LCK PRDX2 ETS1 S1PR4'.split(' '), 'ACTB FTH1 CYBA'.split(' '), ['IRF1']]
-
-    # model.gene_program_discovery(balance_obs='leiden', prior_programs=prior_programs)
-    model.gene_program_discovery(balance_obs='leiden')
-    model.network_infer(sample_col_name='sample_id', example_list=subset_list)
-
-    '''
-    data_folder = 'data/HSC_simulation/'
-
-
-    cadata = ad.read_h5ad(data_folder + 'hsc_simulation_with_perturbations_small.h5ad')
-
-    # random_select = np.random.choice(cadata.shape[0], 10000, replace=False)
-    # cadata = cadata[random_select, :].copy()
-
-    # cadata.write(data_folder + 'hsc_simulation_with_perturbations_small.h5ad')
-
-    save_path = 'test/hsc_test0912'
-
-    samp_list = np.unique(cadata.obs['sample_id'])
-    subset_list = samp_list[: 3]
-
-    num_spin = cadata.shape[1]
-    model = DSPIN(cadata, save_path, num_spin=num_spin)
-
-    model.network_infer(sample_col_name='sample_id', example_list=subset_list)
-'''

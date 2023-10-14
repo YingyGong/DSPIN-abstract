@@ -413,8 +413,8 @@ def pseudol_gradient(cur_j, cur_h, cur_state):
         cur_j_grad[ii, ii] = np.mean(j_sub_grad)
         cur_h_grad[ii] = np.mean(h_eff_grad)
 
-    # Symmetrize j gradient matrix
-    cur_j_grad = (cur_j_grad + cur_j_grad.T) / 2
+        # Symmetrize j gradient matrix
+        cur_j_grad = (cur_j_grad + cur_j_grad.T) / 2
 
     return -cur_j_grad, -cur_h_grad
 
