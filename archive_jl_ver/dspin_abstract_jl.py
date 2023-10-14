@@ -45,7 +45,7 @@ from util.plotting import (
 
 '''
 
-from util.compute_new import (
+from util.compute import (
     onmf_discretize,
     sample_corr_mean,
     learn_network_adam,
@@ -54,7 +54,7 @@ from util.compute_new import (
     summary_components
 )
 
-from util.plot_new import (
+from util.plot import (
     onmf_to_csv
 )
 
