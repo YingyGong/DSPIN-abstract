@@ -179,12 +179,15 @@ def temporary_spin_name(csv_file, num_gene: int = 4):
 
 
 def plot_final(
-        gene_program_name,
         cur_j,
+        gene_program_name,
+        adj_matrix_threshold: float = 0.4,
         nodesz: float = 3,
         linewz: float = 1,
         node_color: str = 'k',
-        pos=None):
+        figsize=[20, 20],
+        pos=None,
+        node_fontsize=None):
     """
     Plot the final gene regulatory network.
 
@@ -350,7 +353,7 @@ def plot_final(
                 coordinates[1] + np.sin(theta) * offset)
         return adjusted_pos
 
-    sc.set_figure_params(figsize=[40, 40])
+    sc.set_figure_params(figsize=figsize)
 
     # Calculating spin orders and perturbed positions for plotting.
     spin_order, pert_pos = spin_order_in_cluster(cur_j)
@@ -361,7 +364,7 @@ def plot_final(
 
     # Filtering the adjacency matrix.
     cur_j_filt = cur_j.copy()
-    cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), 40)] = 0
+    cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), adj_matrix_threshold * 100)] = 0
 
     # Creating a graph from the filtered adjacency matrix and ordering spins.
     G = nx.from_numpy_matrix(cur_j_filt[spin_order, :][:, spin_order])
@@ -388,6 +391,8 @@ def plot_final(
     # Adding labels with path effects to nodes in the network.
     path_effect = [patheffects.withStroke(linewidth=3, foreground='w')]
 
+    if node_fontsize is None:
+        node_fontsize = figsize[0] * 20/ num_spin
     adjusted_positions = adjust_label_position(pos, 0.5)
     for ii in range(num_spin):
         x, y = adjusted_positions[ii]
@@ -395,8 +400,7 @@ def plot_final(
             x,
             y,
             node_label[ii],
-            fontsize=1000 /
-            num_spin,
+            fontsize= node_fontsize,
             color='k',
             ha='center',
             va='center',
@@ -406,4 +410,4 @@ def plot_final(
             np.pi *
             180)
         text.set_path_effects(path_effect)
-    ax.set_title('Gene Regulatory Network')
+    ax.set_title('Gene Regulatory Network Reconstructed by D-SPIN', fontsize=node_fontsize)

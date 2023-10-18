@@ -498,8 +498,6 @@ class ProgramDSPIN(AbstractDSPIN):
                     num_onmf_components,
                     ii),
                 allow_pickle=True).item()
-            print("rec_components shape: ", rec_components.shape)
-            print("cur_onmf shape: ", cur_onmf.components_.shape)
             rec_components[ii] = cur_onmf.components_
 
         all_components = rec_components.reshape(-1,

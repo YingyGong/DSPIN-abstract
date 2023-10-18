@@ -409,7 +409,7 @@ def pseudol_gradient(cur_j, cur_h, cur_state):
 
         j_off_sub_grad = h_eff_grad * cur_state
 
-        cur_j_grad[ii, :] = np.mean(j_off_sub_grad, axis=1)
+        cur_j_grad[ii, :] = np_mean(j_off_sub_grad, axis=1)
         cur_j_grad[ii, ii] = np.mean(j_sub_grad)
         cur_h_grad[ii] = np.mean(h_eff_grad)
 
