@@ -1,9 +1,8 @@
 # -*-coding:utf-8 -*-
 '''
-@Time    :   2023/09/18 11:10
+@Time    :   2023/10/30 15:41
 @Author  :   Jialong Jiang, Yingying Gong
 '''
-
 
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as patheffects
@@ -171,17 +170,172 @@ def temporary_spin_name(csv_file, num_gene: int = 4):
     List[str]: A list containing the generated temporary spin names.
     """
     df = pd.read_csv(csv_file, header=None)
-    # Create spin names by joining the first 6 elements (or less if not
+    # Create spin names by joining the first 4 elements (or less if not
     # available) of each column in the dataframe
-    spin_names = ['P' + '_'.join(map(str, df[col][:6])) for col in df.columns]
+    spin_names = ['P' + '_'.join(map(str, df[col][:num_gene])) for col in df.columns]
     spin_names_formatted = [format_label(name) for name in spin_names]
     return spin_names_formatted
+
+def spin_order_in_cluster(j_mat, resolution_parameter: float = 2):
+    """ Determine the order of spins in the cluster.
+
+    Args:
+    - j_mat: The adjacency matrix representing connections between spins.
+
+    Returns:
+    - spin_order: The order of spins determined by the function.
+    - pert_pos: The positions perturbed for visualization.
+    """
+    np.fill_diagonal(j_mat, 0)
+
+    thres = 0
+    j_filt = j_mat.copy()
+    j_filt[np.abs(j_mat) < thres] = 0
+    np.fill_diagonal(j_filt, 0)
+    G = nx.from_numpy_array(j_filt)
+
+    G = ig.Graph.from_networkx(G)
+    G_pos = G.subgraph_edges(
+        G.es.select(
+            weight_gt=0),
+        delete_vertices=False)
+    G_neg = G.subgraph_edges(
+        G.es.select(
+            weight_lt=0),
+        delete_vertices=False)
+    G_neg.es['weight'] = [-w for w in G_neg.es['weight']]
+
+    part_pos = la.RBConfigurationVertexPartition(
+        G_pos, weights='weight', resolution_parameter=resolution_parameter)
+    part_neg = la.RBConfigurationVertexPartition(
+        G_neg, weights='weight', resolution_parameter=resolution_parameter)
+    optimiser = la.Optimiser()
+    diff = optimiser.optimise_partition_multiplex(
+        [part_pos, part_neg], layer_weights=[1, -1])
+
+    net_class = list(part_pos)
+    spin_order = [spin for cur_list in net_class for spin in cur_list]
+    net_class_len = [len(cur_list) for cur_list in net_class]
+
+    start_angle = 0 * np.pi
+    end_angle = 2 * np.pi
+    gap_size = 2
+
+    angle_list_raw = np.linspace(start_angle, end_angle, np.sum(
+        net_class_len) + gap_size * len(net_class_len) + 1)[: - 1]
+    angle_list = []
+    size_group_cum = np.cumsum(net_class_len)
+    size_group_cum = np.insert(size_group_cum, 0, 0)
+    # angle_list = np.linspace(start_angle, end_angle, len(leiden_list) + 1)
+    for ii in range(len(net_class_len)):
+        angle_list.extend(
+            angle_list_raw[size_group_cum[ii] + gap_size * ii: size_group_cum[ii + 1] + gap_size * ii])
+
+    pert_dist = 3
+
+    pert_pos = np.array(
+        [- pert_dist * np.cos(angle_list), pert_dist * np.sin(angle_list)]).T
+
+    return spin_order, pert_pos
+
+def plot_network(
+        G,
+        j_mat,
+        ax,
+        nodesz=1,
+        linewz=1,
+        node_color='k',
+        pos=None):
+    """ 
+    Plot the network.
+
+    Args:
+    - G: The networkx graph object.
+    - j_mat: The adjacency matrix representing connections between spins.
+    - ax: The axis object to plot the network.
+    - nodesz: The size of nodes in the network.
+    - linewz: The width of edges in the network.
+    - node_color: The color of nodes in the network.
+    - pos: The positions of nodes in the network.
+    """
+
+    self_loops = [(u, v) for u, v in G.edges() if u == v]
+    G.remove_edges_from(self_loops)
+
+    eposi = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] > 0]
+    wposi = np.array([d['weight']
+                        for (u, v, d) in G.edges(data=True) if d['weight'] > 0])
+
+    enega = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] < 0]
+    wnega = np.array([d['weight']
+                        for (u, v, d) in G.edges(data=True) if d['weight'] < 0])
+
+    col1 = '#f0dab1'
+
+    nx.draw_networkx_nodes(
+        G,
+        pos,
+        ax=ax,
+        node_size=61.8 *
+        nodesz,
+        node_color=node_color,
+        edgecolors='k')
+
+    def sig_fun(xx): return (1 / (1 + np.exp(- 5 * (xx + cc))))
+    cc = np.max(np.abs(j_mat)) / 10
+
+    # edges
+    nx.draw_networkx_edges(
+        G,
+        pos,
+        ax=ax,
+        edgelist=eposi,
+        width=linewz * wposi,
+        edge_color='#3285CC',
+        alpha=sig_fun(wposi))
+
+    nx.draw_networkx_edges(G,
+                            pos,
+                            ax=ax,
+                            edgelist=enega,
+                            width=- linewz * wnega,
+                            edge_color='#E84B23',
+                            alpha=sig_fun(- wnega))
+
+    margin = 0.2
+    plt.margins(x=0.1, y=0.1)
+
+    ax.set_axis_off()
+    ax.set_aspect('equal')
+    return ax
+
+def adjust_label_position(pos, offset=0.1):
+    """ 
+    Adjust the label positions radially outward from the center.
+
+    Args:
+    - pos: The original positions of the labels.
+    - offset: The radial distance by which to adjust the label positions.
+
+    Returns:
+    - adjusted_pos: The adjusted positions of the labels.
+    """
+    adjusted_pos = {}
+    for node, coordinates in enumerate(pos):
+        theta = np.arctan2(coordinates[1], coordinates[0])
+        radius = np.sqrt(coordinates[0]**2 + coordinates[1]**2)
+        adjusted_pos[node] = (
+            coordinates[0] + np.cos(theta) * offset,
+            coordinates[1] + np.sin(theta) * offset)
+    return adjusted_pos
 
 
 def plot_final(
         cur_j,
         gene_program_name,
+        title,
         adj_matrix_threshold: float = 0.4,
+        resolution_parameter: float = 2,
         nodesz: float = 3,
         linewz: float = 1,
         node_color: str = 'k',
@@ -199,164 +353,10 @@ def plot_final(
     - node_color: The color of nodes in the network.
     - pos: The positions of nodes in the network.
     """
-
-    def spin_order_in_cluster(j_mat):
-        """ Determine the order of spins in the cluster.
-
-        Args:
-        - j_mat: The adjacency matrix representing connections between spins.
-
-        Returns:
-        - spin_order: The order of spins determined by the function.
-        - pert_pos: The positions perturbed for visualization.
-        """
-        np.fill_diagonal(j_mat, 0)
-
-        thres = 0
-        j_filt = j_mat.copy()
-        j_filt[np.abs(j_mat) < thres] = 0
-        np.fill_diagonal(j_filt, 0)
-        G = nx.from_numpy_array(j_filt)
-
-        G = ig.Graph.from_networkx(G)
-        G_pos = G.subgraph_edges(
-            G.es.select(
-                weight_gt=0),
-            delete_vertices=False)
-        G_neg = G.subgraph_edges(
-            G.es.select(
-                weight_lt=0),
-            delete_vertices=False)
-        G_neg.es['weight'] = [-w for w in G_neg.es['weight']]
-
-        part_pos = la.RBConfigurationVertexPartition(
-            G_pos, weights='weight', resolution_parameter=2)
-        part_neg = la.RBConfigurationVertexPartition(
-            G_neg, weights='weight', resolution_parameter=2)
-        optimiser = la.Optimiser()
-        diff = optimiser.optimise_partition_multiplex(
-            [part_pos, part_neg], layer_weights=[1, -1])
-
-        net_class = list(part_pos)
-        spin_order = [spin for cur_list in net_class for spin in cur_list]
-        net_class_len = [len(cur_list) for cur_list in net_class]
-
-        start_angle = 0 * np.pi
-        end_angle = 2 * np.pi
-        gap_size = 2
-
-        angle_list_raw = np.linspace(start_angle, end_angle, np.sum(
-            net_class_len) + gap_size * len(net_class_len) + 1)[: - 1]
-        angle_list = []
-        size_group_cum = np.cumsum(net_class_len)
-        size_group_cum = np.insert(size_group_cum, 0, 0)
-        # angle_list = np.linspace(start_angle, end_angle, len(leiden_list) + 1)
-        for ii in range(len(net_class_len)):
-            angle_list.extend(
-                angle_list_raw[size_group_cum[ii] + gap_size * ii: size_group_cum[ii + 1] + gap_size * ii])
-
-        pert_dist = 3
-
-        pert_pos = np.array(
-            [- pert_dist * np.cos(angle_list), pert_dist * np.sin(angle_list)]).T
-
-        return spin_order, pert_pos
-
-    def plot_network(
-            G,
-            j_mat,
-            ax,
-            nodesz=1,
-            linewz=1,
-            node_color='k',
-            pos=None):
-        """ 
-        Plot the network.
-
-        Args:
-        - G: The networkx graph object.
-        - j_mat: The adjacency matrix representing connections between spins.
-        - ax: The axis object to plot the network.
-        - nodesz: The size of nodes in the network.
-        - linewz: The width of edges in the network.
-        - node_color: The color of nodes in the network.
-        - pos: The positions of nodes in the network.
-        """
-
-        self_loops = [(u, v) for u, v in G.edges() if u == v]
-        G.remove_edges_from(self_loops)
-
-        eposi = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] > 0]
-        wposi = np.array([d['weight']
-                         for (u, v, d) in G.edges(data=True) if d['weight'] > 0])
-
-        enega = [(u, v) for (u, v, d) in G.edges(data=True) if d['weight'] < 0]
-        wnega = np.array([d['weight']
-                         for (u, v, d) in G.edges(data=True) if d['weight'] < 0])
-
-        col1 = '#f0dab1'
-
-        nx.draw_networkx_nodes(
-            G,
-            pos,
-            ax=ax,
-            node_size=61.8 *
-            nodesz,
-            node_color=node_color,
-            edgecolors='k')
-
-        def sig_fun(xx): return (1 / (1 + np.exp(- 5 * (xx + cc))))
-        cc = np.max(np.abs(j_mat)) / 10
-
-        # edges
-        nx.draw_networkx_edges(
-            G,
-            pos,
-            ax=ax,
-            edgelist=eposi,
-            width=linewz * wposi,
-            edge_color='#3285CC',
-            alpha=sig_fun(wposi))
-
-        nx.draw_networkx_edges(G,
-                               pos,
-                               ax=ax,
-                               edgelist=enega,
-                               width=- linewz * wnega,
-                               edge_color='#E84B23',
-                               alpha=sig_fun(- wnega))
-
-        margin = 0.2
-        plt.margins(x=0.1, y=0.1)
-
-        ax.set_axis_off()
-        ax.set_aspect('equal')
-        return ax
-
-    def adjust_label_position(pos, offset=0.1):
-        """ 
-        Adjust the label positions radially outward from the center.
-
-        Args:
-        - pos: The original positions of the labels.
-        - offset: The radial distance by which to adjust the label positions.
-
-        Returns:
-        - adjusted_pos: The adjusted positions of the labels.
-        """
-        adjusted_pos = {}
-        for node, coordinates in enumerate(pos):
-            theta = np.arctan2(coordinates[1], coordinates[0])
-            radius = np.sqrt(coordinates[0]**2 + coordinates[1]**2)
-            adjusted_pos[node] = (
-                coordinates[0] + np.cos(theta) * offset,
-                coordinates[1] + np.sin(theta) * offset)
-        return adjusted_pos
-
     sc.set_figure_params(figsize=figsize)
 
     # Calculating spin orders and perturbed positions for plotting.
-    spin_order, pert_pos = spin_order_in_cluster(cur_j)
+    spin_order, pert_pos = spin_order_in_cluster(cur_j, resolution_parameter)
 
     num_spin = cur_j.shape[0]
 
@@ -367,7 +367,7 @@ def plot_final(
     cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), adj_matrix_threshold * 100)] = 0
 
     # Creating a graph from the filtered adjacency matrix and ordering spins.
-    G = nx.from_numpy_matrix(cur_j_filt[spin_order, :][:, spin_order])
+    G = nx.convert_matrix.from_numpy_array(cur_j_filt[spin_order, :][:, spin_order])
 
     # Initializations and adjustments for plotting.
     pos = pert_pos
@@ -375,8 +375,10 @@ def plot_final(
     node_label = np.array(gene_program_name)[spin_order]
     # node_label = np.array([format_label(label) for label in gene_list])
 
-    nodesz = np.sqrt(100 / num_spin)
-    linewz = np.sqrt(100 / num_spin)
+    if not nodesz:
+        nodesz = np.sqrt(100 / num_spin)
+    if not linewz:
+        linewz = np.sqrt(100 / num_spin)
 
     ax = plt.subplot(grid[1])
     ax = plot_network(
@@ -410,4 +412,6 @@ def plot_final(
             np.pi *
             180)
         text.set_path_effects(path_effect)
-    ax.set_title('Gene Regulatory Network Reconstructed by D-SPIN', fontsize=node_fontsize)
+    if not title:
+        title = 'Gene Regulatory Network Reconstructed by D-SPIN'
+    ax.set_title(title, fontsize=node_fontsize * 1.5, y = 1.05)
