@@ -333,7 +333,8 @@ def adjust_label_position(pos, offset=0.1):
 def plot_final(
         cur_j,
         gene_program_name,
-        title,
+        cluster:bool = True,
+        title: str = "Gene Regulatory Network Reconstructed by D-SPIN",
         adj_matrix_threshold: float = 0.4,
         resolution_parameter: float = 2,
         nodesz: float = 3,
@@ -341,6 +342,7 @@ def plot_final(
         node_color: str = 'k',
         figsize=[20, 20],
         pos=None,
+        spin_order=None,
         node_fontsize=None):
     """
     Plot the final gene regulatory network.
@@ -355,10 +357,16 @@ def plot_final(
     """
     sc.set_figure_params(figsize=figsize)
 
-    # Calculating spin orders and perturbed positions for plotting.
-    spin_order, pert_pos = spin_order_in_cluster(cur_j, resolution_parameter)
-
     num_spin = cur_j.shape[0]
+    
+    # Setting default values for parameters of node size and line width.
+    if not nodesz:
+        nodesz = np.sqrt(100 / num_spin)
+    if not linewz:
+        linewz = np.sqrt(100 / num_spin)
+    if node_fontsize is None:
+        node_fontsize = figsize[0] * 20/ num_spin
+
 
     fig, grid = sc.pl._tools._panel_grid(0.2, 0.2, ncols=2, num_panels=2)
 
@@ -366,19 +374,22 @@ def plot_final(
     cur_j_filt = cur_j.copy()
     cur_j_filt[np.abs(cur_j_filt) < np.percentile(np.abs(cur_j_filt), adj_matrix_threshold * 100)] = 0
 
+    if spin_order is None:
+        # Calculating spin orders and perturbed positions for plotting.
+        spin_order, pert_pos = spin_order_in_cluster(cur_j, resolution_parameter)
+
     # Creating a graph from the filtered adjacency matrix and ordering spins.
     G = nx.convert_matrix.from_numpy_array(cur_j_filt[spin_order, :][:, spin_order])
 
     # Initializations and adjustments for plotting.
-    pos = pert_pos
+    if not cluster:
+        pos = nx.circular_layout(G)
+    else:
+        pos = pert_pos
     node_color = ['#f0dab1'] * num_spin
     node_label = np.array(gene_program_name)[spin_order]
     # node_label = np.array([format_label(label) for label in gene_list])
 
-    if not nodesz:
-        nodesz = np.sqrt(100 / num_spin)
-    if not linewz:
-        linewz = np.sqrt(100 / num_spin)
 
     ax = plt.subplot(grid[1])
     ax = plot_network(
@@ -392,10 +403,11 @@ def plot_final(
 
     # Adding labels with path effects to nodes in the network.
     path_effect = [patheffects.withStroke(linewidth=3, foreground='w')]
-
-    if node_fontsize is None:
-        node_fontsize = figsize[0] * 20/ num_spin
-    adjusted_positions = adjust_label_position(pos, 0.5)
+    
+    if cluster:
+        adjusted_positions = adjust_label_position(pos, 0.5)
+    else:
+        adjusted_positions = pos
     for ii in range(num_spin):
         x, y = adjusted_positions[ii]
         text = plt.text(
