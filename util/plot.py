@@ -242,10 +242,10 @@ def plot_network(
         G,
         j_mat,
         ax,
+        pos: None,
         nodesz=1,
         linewz=1,
-        node_color='k',
-        pos=None):
+        node_color='k'):
     """ 
     Plot the network.
 
@@ -338,7 +338,7 @@ def plot_final(
         adj_matrix_threshold: float = 0.4,
         resolution_parameter: float = 2,
         nodesz: float = 3,
-        linewz: float = 1,
+        linewz: float = 2,
         node_color: str = 'k',
         figsize=[20, 20],
         pos=None,
