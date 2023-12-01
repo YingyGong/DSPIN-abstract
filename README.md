@@ -19,7 +19,22 @@ DSPIN requires the following python packages:
 
 ## D-SPIN Overview
 
-For detailed decription of the framework and hyperparameter choice in the model, please refer to the preprint.
+D-SPIN contains three main steps: 
+* Gene program discovery
+* Network inference
+* Network analysis
+
+The input data should be [To be filled]
+
+In the gene program discovery step, D-SPIN takes the following arguments: 
+[To be filled]. 
+
+In the network inference step, D-SPIN automatically choose between three inference methods depending on the number of gene programs: (1) Exact maximum-likelihood inference (2) Markov-Chain Monte-Carlo (MCMC) maximum-likelihood inference (3) Pseudo-likelihood inference. The inference method can also be specified by the user. D-SPIN takes the following arguments [To be filled]
+
+In the network analysis step, D-SPIN identifies the modules in the inferred network, and automatically provide a layout of the network and perturbation responses. Further analysis and interpretaion of the network and perturbation response is up to the custome purpose. 
+
+
+## D-SPIN Demo
 
 D-SPIN takes single-cell sequencing data of multiple perturbation conditions. In the second demo, PBMCs are treated with different signaling molecules such as CD3 antibody, LPS, IL1B, and TGFB1
 
