@@ -1,21 +1,23 @@
-# DSPIN-Abstract
-Reframed code and examples of the D-SPIN framework with an object-oriented design for the preprint "D-SPIN constructs gene regulatory network models from multiplexed scRNA-seq data revealing organizing principles of cellular perturbation response" ([bioRxiv](https://www.biorxiv.org/content/10.1101/2023.04.19.537364))
+# DSPIN
+Tutorial, code and examples of the D-SPIN framework for the preprint "D-SPIN constructs gene regulatory network models from multiplexed scRNA-seq data revealing organizing principles of cellular perturbation response" ([bioRxiv](https://www.biorxiv.org/content/10.1101/2023.04.19.537364))
 
 ![alternativetext](/figure/readme/Figure1_20230309_Inna.png)
 
-## Demos
+## Installation
 
-Two demos of D-SPIN are available on Google Colab. 
+D-SPIN is implemented in Python and Matlab. The Python code is sufficient for analysis of small datasets with around 20k cells and tens of conditions. For larger datasets, the Matlab code is recommended as Matlab can be easily deployed on clusters for parallelization with the "parfor" function. 
 
-The first demo reconstructs the regulatory network of simulated hematopoietic stem cell (HSC) differentiation network with perturbations using the BEELINE framework (Pratapa, Aditya, et al. Nature methods, 2020). 
+The python code can be installed with [To be filled]
 
-[Demo1](https://colab.research.google.com/drive/1YdvjNiCkyGx-azXzXz7gqjGGE9RXrDbL?usp=sharing)
+The Matlab code can be downloaded from the folder "matlab_code", and directly executable in Matlab.
 
-The second demo reconstructs regulatory network and response vector in a single-cell dataset collected in the ThomsonLab.In the dataset, human peripheral blood mononuclear cells (PBMCs) were treated with various signaling molecules with different dosages. 
+## Dependencies
 
-[Demo2](https://colab.research.google.com/drive/1zrWFZWtaHQAzG88jgtovCPzt3wiXdlwf?usp=sharing)
+DSPIN requires the following python packages:
 
-## General workflow of D-SPIN
+[To be filled]
+
+## D-SPIN Overview
 
 For detailed decription of the framework and hyperparameter choice in the model, please refer to the preprint.
 
@@ -32,6 +34,19 @@ D-SPIN uses cross-correlation and mean of each perturbation condition to inferre
 The inferred regulatory network and perturbations can be jointly analyzed to reveal how perturbations act in the context of the regulatory network.
 
 ![alternativetext](/figure/thomsonlab_signaling/joint_network_perturbation.png)
+
+## Demos
+
+Two demos of D-SPIN are available on Google Colab. 
+
+The first demo reconstructs the regulatory network of simulated hematopoietic stem cell (HSC) differentiation network with perturbations using the BEELINE framework (Pratapa, Aditya, et al. Nature methods, 2020). 
+
+[Demo1](https://colab.research.google.com/drive/1YdvjNiCkyGx-azXzXz7gqjGGE9RXrDbL?usp=sharing)
+
+The second demo reconstructs regulatory network and response vector in a single-cell dataset collected in the ThomsonLab.In the dataset, human peripheral blood mononuclear cells (PBMCs) were treated with various signaling molecules with different dosages. 
+
+[Demo2](https://colab.research.google.com/drive/1zrWFZWtaHQAzG88jgtovCPzt3wiXdlwf?usp=sharing)
+
 
 ## References
 
