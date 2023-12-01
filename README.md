@@ -32,12 +32,34 @@ The input data should be AnnData object after typical single-cell preprocessing 
 * Clustering information for each cell in adata.obs['leiden']
 * If some samples are control conditions, the relative response vectors will be computed for each batch with respect to the average of control conditions. The control conditions can be indicated in adata.obs['if_control'] with 1 for control and 0 for non-control.
 
+The D-SPIN is initiallized by dspin.DSPIN(adata) with the following major arguments:
+
+* adata: AnnData object with the above information
+* save_path: path to save the results
+* num_spin (default 15): number of gene programs in the model
+* filter_threshold (default 0.02): threshold for minimal proportion of cells that each gene program is expressed in
+
 ### Gene program discovery
 
-By default, D-SPIN use orgthogonal non-negative matrix factorization (ONMF) to discover gene programs that coexpress in the data. The user can also specify pre-defined gene programs in full or partial. Specifically, 
+By default, D-SPIN use orgthogonal non-negative matrix factorization (oNMF) to discover gene programs that coexpress in the data. The user can also specify pre-defined gene programs in full or partial. There are three senarios depending on the num_spin and the input parameter prior_programs.
+* No pre-defined gene programs: empty prior_programs (default)
+* Full pre-defined gene programs: the number of gene programs in prior_programs is equal to num_spin
+* Partial pre-defined gene programs: the number of gene programs in prior_programs is less than num_spin
 
-In the gene program discovery step, D-SPIN takes the following arguments: 
+The gene program discovery contains two stages, the first stage subset and normalize the gene matrix, and the second stage run oNMF multiple times on the subset matrix to obtain consensus gene programs. Subsetting the gene matrix is 
+As the algorithm for oNMF is stochastic, the algorithm is run multiples times and results from multiple run are combined to obtain a set of consensus gene program. 
+
+In the gene program discovery step, D-SPIN takes the following major arguments: 
 [To be filled]. 
+num_onmf_components (int, optional): The number of ONMF components. Default is None.
+num_subsample (int, optional): Number of samples to obtain after subsampling. Default is 10000.
+num_subsample_large (int, optional): Number of samples for large subsampling. Default is None.
+num_repeat (int, optional): Number of times to repeat the ONMF computation. Default is 10.
+balance_obs (str, optional): Observation to balance. Default is None.
+balance_method (str, optional): Method used for balancing. Default is None.
+max_sample_rate (float, optional): Maximum sample rate. Default is 2.
+prior_programs (List[List[str]], optional): List of prior programs. Default is None.
+summary_method (str, optional): Method used for summarizing the components. Default is 'kmeans'.
 
 ### Network inference
 
@@ -76,7 +98,7 @@ The second demo reconstructs regulatory network and response vector in a single-
 
 [Demo2](https://colab.research.google.com/drive/1zrWFZWtaHQAzG88jgtovCPzt3wiXdlwf?usp=sharing)
 
-# General suggestions for using D-SPIN
+## General suggestions for using D-SPIN
 
 # References
 
