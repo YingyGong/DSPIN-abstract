@@ -16,7 +16,10 @@ The Matlab code can be downloaded from the folder "DSPIN_matlab", and directly e
 
 DSPIN requires the following python packages:
 
-[To be filled]
+- anndata (0.10.3)
+- matplotlib (3.8.0)
+- scanpy (1.9.6)
+- tqdm (4.65.0)
 
 ## D-SPIN Overview
 
