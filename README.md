@@ -32,7 +32,7 @@ The input data should be AnnData object after typical single-cell preprocessing 
 * Clustering information for each cell in adata.obs['leiden']
 * If some samples are control conditions, the relative response vectors will be computed for each batch with respect to the average of control conditions. The control conditions can be indicated in adata.obs['if_control'] with 1 for control and 0 for non-control.
 
-The D-SPIN is initiallized by dspin.DSPIN(adata) with the following major arguments:
+The D-SPIN is initiallized by model = dspin.DSPIN(adata) with the following major arguments:
 
 * adata: AnnData object with the above information
 * save_path: path to save the results
@@ -46,10 +46,9 @@ By default, D-SPIN use orgthogonal non-negative matrix factorization (oNMF) to d
 * Full pre-defined gene programs: the number of gene programs in prior_programs is equal to num_spin
 * Partial pre-defined gene programs: the number of gene programs in prior_programs is less than num_spin
 
-The gene program discovery contains two stages, the first stage subset and normalize the gene matrix, and the second stage run oNMF multiple times on the subset matrix to obtain consensus gene programs. Subsetting the gene matrix is 
-As the algorithm for oNMF is stochastic, the algorithm is run multiples times and results from multiple run are combined to obtain a set of consensus gene program. 
+The gene program discovery contains two stages, the first stage subset and normalize the gene matrix, and the second stage run oNMF multiple times on the subset matrix to obtain consensus gene programs. Subsetting the gene matrix is primarily for computational efficiency, and preferrentially sampling cells with smaller population also helps to avoid overfitting on over-represented cell states in the dataset. As the algorithm for oNMF is stochastic, the algorithm is run multiples times and results from multiple run are combined to obtain a set of consensus gene program. Also, the number of oNMF components can be specified by the user to discover gene programs with finer resolution.
 
-In the gene program discovery step, D-SPIN takes the following major arguments: 
+Overall, in the gene program discovery function model.gene_program_discovery() , D-SPIN takes the following major arguments: 
 [To be filled]. 
 num_onmf_components (int, optional): The number of ONMF components. Default is None.
 num_subsample (int, optional): Number of samples to obtain after subsampling. Default is 10000.
