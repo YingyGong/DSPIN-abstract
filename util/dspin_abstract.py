@@ -4,10 +4,10 @@
 @Author  :   Jialong Jiang, Yingying Gong
 '''
 
-from util.plot import (
+from .plot import (
     onmf_to_csv
 )
-from util.compute import (
+from .compute import (
     onmf_discretize,
     sample_corr_mean,
     learn_network_adam,
