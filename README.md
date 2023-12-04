@@ -21,6 +21,8 @@ DSPIN requires the following python packages:
 - scanpy (1.9.6)
 - tqdm (4.65.0)
 
+Note: other versions may work as well.
+
 ## D-SPIN Overview
 
 D-SPIN contains three main steps: 
